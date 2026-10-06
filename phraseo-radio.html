@@ -1193,6 +1193,7 @@ function squelch(duration = 0.12, volume = 0.08) {
 
 
 
+
 // ── Détection du moteur Claude ────────────────────────────────────
 let samplePromise = null;
 let sampleBlocked = false; // refus de consentement ou indisponibilité pendant cette visite
@@ -1330,14 +1331,17 @@ function localDebrief(exchanges, note) {
 
 // ── Moteur de règles local ────────────────────────────────────────
 const LETTER_RX = {
-  A: 'alfa|alpha', B: 'bravo', C: 'charlie', D: 'delta', E: 'echo', F: 'fox', G: 'golf', H: 'hotel', I: 'india',
-  J: 'juliet', K: 'kilo', L: 'lima', M: 'mike|maik', N: 'november|novembre', O: 'oscar', P: 'papa', Q: 'quebec|kebec',
-  R: 'romeo', S: 'sierra', T: 'tango', U: 'uniform', V: 'victor', W: 'whisk', X: 'x ?ray|xray|ix ?re', Y: 'yankee|yanki', Z: 'zulu|zoulou',
+  A: 'alfa|alpha', B: 'bravo', C: 'charl|sharl', D: 'delta', E: 'echo|eco', F: 'fox|fax', G: 'golf', H: 'hotel|hottel|otel', I: 'indi',
+  J: 'juliet|julie', K: 'kilo', L: 'lima', M: 'mike|maik|maic', N: 'novem', O: 'oscar', P: 'papa', Q: 'quebe|kebe|kebec',
+  R: 'rome|romi', S: 'sierr|siera', T: 'tango', U: 'unif', V: 'victor|viktor', W: 'whisk|wisk', X: 'x ?ray|xray|x ?rai|ix ?re', Y: 'yank|yanki', Z: 'zulu|zoulou',
 };
 const WORD_DIGITS = {
   zero: 0, un: 1, une: 1, one: 1, deux: 2, two: 2, trois: 3, three: 3, tree: 3, quatre: 4, four: 4,
   cinq: 5, five: 5, fife: 5, six: 6, sept: 7, seven: 7, huit: 8, eight: 8, neuf: 9, nine: 9, niner: 9,
 };
+
+// Mots courants qui ne doivent pas être lus comme des lettres d'indicatif
+const LETTER_WORDS_EXCLUDE = { a: 1, de: 1, du: 1, la: 1, le: 1, au: 1, et: 1, en: 1, je: 1, ma: 1, va: 1, vu: 1 };
 
 const strip = (s) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
@@ -1349,11 +1353,19 @@ function normalize(t) {
 }
 
 // Positions (index de mot) des lettres phonétiques reconnues, dans l'ordre du texte
-function letterHits(norm) {
+// La dictée iOS convertit souvent l'alphabet phonétique en lettres (« Fox Hotel Victor… » → « F-HVXH »).
+// On accepte donc les deux formes : mots phonétiques ou lettres isolées / groupées de l'immatriculation.
+function letterHits(norm, regLetters = '') {
   const words = norm.trim().split(' ');
   const hits = [];
+  const allowed = new Set(regLetters.toLowerCase().split(''));
   for (let i = 0; i < words.length; i++) {
-    const w = words[i] + (words[i + 1] ? ` ${words[i + 1]}` : '');
+    const tok = words[i];
+    if (/^[a-z]{1,6}$/.test(tok) && tok.split('').every((c) => allowed.has(c)) && !(tok in LETTER_WORDS_EXCLUDE)) {
+      tok.toUpperCase().split('').forEach((L) => hits.push({ L, i }));
+      continue;
+    }
+    const w = tok + (words[i + 1] ? ` ${words[i + 1]}` : '');
     for (const [L, rx] of Object.entries(LETTER_RX)) {
       if (new RegExp(`^(${rx})`).test(w)) { hits.push({ L, i }); break; }
     }
@@ -1384,19 +1396,59 @@ function findSeqLast(hits, letters) {
   return res;
 }
 
+// ── Correspondance approximative (erreurs de la dictée : « Voyant formation » pour « Royan Information ») ──
+function lev(a, b) {
+  const m = a.length, n = b.length;
+  let prev = Array.from({ length: n + 1 }, (_, j) => j);
+  for (let i = 1; i <= m; i++) {
+    const cur = [i];
+    for (let j = 1; j <= n; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    prev = cur;
+  }
+  return prev[n];
+}
+const letters = (s) => strip(String(s).toLowerCase()).replace(/[^a-z0-9]/g, '');
+
+// Cherche `target` dans les mots [from, to[ du texte, en tolérant ~30 % de caractères différents
+function fuzzyIn(words, target, from = 0, to = words.length, ratio = 0.3) {
+  const t = letters(target);
+  if (!t) return false;
+  const tol = Math.max(1, Math.floor(t.length * ratio));
+  for (let i = Math.max(0, from); i < Math.min(to, words.length); i++) {
+    let joined = '';
+    for (let j = i; j < Math.min(words.length, i + 4); j++) {
+      joined += letters(words[j]);
+      if (joined.length > t.length + tol) break;
+      if (Math.abs(joined.length - t.length) <= tol && lev(joined, t) <= tol) return true;
+    }
+  }
+  return false;
+}
+
+// Type d'avion : « WT9 » accepte « wt9 », « w t 9 », « double v t neuf », « whisky tango 9 »…
+function typeRx(type) {
+  const first = strip(String(type || 'DR400')).toLowerCase().split(/\s+/)[0].replace(/[^a-z0-9]/g, '');
+  return first.split('').map((c) => {
+    if (/\d/.test(c)) return c;
+    const alt = [c, LETTER_RX[c.toUpperCase()]];
+    if (c === 'w') alt.push('double ?v[e]?');
+    return `(?:${alt.join('|')})[a-z]*`;
+  }).join(' ?');
+}
+
 const has = (norm, rx) => new RegExp(rx).test(norm);
 
 // Éléments attendus par étape (champ « need » des scénarios)
 const NEED = {
-  type: { label: "Type d'avion", test: (n, ex) => has(n, strip(ex.acType || 'dr400').toLowerCase().replace(/[^a-z0-9]/g, '').split('').join(' ?')) || has(n, '(robin|cessna|piper|tecnam|aquila|dr ?4|pa ?28|c ?1[57]2)') },
-  vfr: { label: 'VFR', test: (n) => has(n, 'v ?f ?r') },
+  type: { label: "Type d'avion", test: (n, ex) => has(n, typeRx(ex.acType)) || fuzzyIn(n.trim().split(' '), String(ex.acType || '').split(/\s+/)[0], 0, 999, 0.34) || has(n, '(robin|cessna|piper|tecnam|aquila|dynamic|dr ?4|pa ?28|c ?1[57]2)') },
+  vfr: { label: 'VFR', test: (n) => has(n, '(v ?f ?r|ve ?eff?e? ?err?e?|vais faire|v faire|vfr)') },
   pos: { label: 'Position', test: (n) => has(n, '\\b(nm|nautique|mile|nord|sud|est|ouest|north|south|east|west)') },
-  alt: { label: 'Altitude', test: (n) => has(n, '(pied|feet|ft)\\b') },
+  alt: { label: 'Altitude', test: (n) => has(n, '(pied|feet|\\bft\\b)') },
   eta: { label: 'Heure estimée', test: (n) => has(n, 'estim') },
   hdg: { label: 'Cap', test: (n) => has(n, '\\b(cap|heading)\\b') },
   pob: { label: 'Personnes à bord', test: (n) => has(n, '(personne|a bord|persons|on board|pob)') },
-  from: { label: 'Provenance', test: (n, ex) => has(n, strip(ex.fromName).toLowerCase().split(' ')[0]) },
-  to: { label: 'Destination', test: (n, ex) => has(n, strip(ex.toName).toLowerCase().split(' ')[0]) },
+  from: { label: 'Provenance', test: (n, ex) => fuzzyIn(n.trim().split(' '), ex.fromName.split(' ')[0], 0, 999, 0.25) },
+  to: { label: 'Destination', test: (n, ex) => fuzzyIn(n.trim().split(' '), ex.toName.split(' ')[0], 0, 999, 0.25) },
   landing: { label: 'Atterrissage', test: (n) => has(n, '(atterri|landing|full stop|atterrissage complet)') },
   takeoff: { label: 'Décollage', test: (n) => has(n, '(decoll|taking off|take off)') },
   lineup: { label: 'Alignement', test: (n) => has(n, '(align|lining up|line up)') },
@@ -1433,7 +1485,7 @@ const TERMS = [
 
 function localCheck(ex) {
   const norm = normalize(ex.transcript);
-  const { hits, count } = letterHits(norm);
+  const { hits, count } = letterHits(norm, ex.cs.replace(/[^A-Z0-9]/gi, ''));
   const erreurs = [];
   const coll = [];
   const add = (severite, categorie, entendu, correction, explication, source = 'manuel') =>
@@ -1462,20 +1514,21 @@ function localCheck(ex) {
     add(isReadback ? 'mineure' : 'conseil', 'ordre', '…', 'indicatif en fin de message', 'Dans un collationnement ou une réponse, l\'indicatif se place à la fin.');
   }
 
-  // 2. Nom de la station en début de message (appel)
+  // 2. Nom de la station en début de message (appel) — comparaison approximative
+  const words = norm.trim().split(' ');
   if (ex.stationFirst && ex.stationName) {
-    const st = strip(ex.stationName.toLowerCase()).split(' ')[0];
-    const firstWords = norm.trim().split(' ').slice(0, 3).join(' ');
-    if (!firstWords.includes(st)) {
-      const wrong = norm.match(/^\s*(?:mayday \S+ \S+ |pan pan pan pan pan pan )?([a-z]+(?: [a-z]+)?) (information|info|tour|tower|traffic)\b/);
-      if (wrong) add('majeure', 'autre', `${wrong[1]} ${wrong[2]}`, ex.stationName, 'Mauvaise station appelée : vérifie le nom de l\'organisme avant d\'émettre.');
-      else add('mineure', 'ordre', '—', ex.stationName, 'Un appel commence par le nom de la station appelée.');
+    const zone = ex.urgency ? 12 : 4; // après MAYDAY / PAN PAN, le nom vient plus loin
+    const name = ex.stationName.split(' ')[0];
+    const found = fuzzyIn(words, ex.stationName, 0, zone) || fuzzyIn(words, `${name} info`, 0, zone) || fuzzyIn(words, name, 0, zone, 0.2);
+    if (!found) {
+      const other = AERODROMES.find((a) => a.name !== name && fuzzyIn(words, a.name, 0, zone, 0.2));
+      if (other) add('majeure', 'autre', other.name, ex.stationName, 'Mauvaise station appelée : vérifie le nom de l\'organisme avant d\'émettre.');
+      else add('conseil', 'ordre', '—', ex.stationName, 'Nom de la station non reconnu en début de message (possiblement la reconnaissance vocale : relis la transcription avant d\'émettre).');
     }
   }
   if (ex.kind === 'auto' && ex.stationName) {
-    const st = strip(ex.stationName.toLowerCase()).split(' ')[0];
-    const lastWords = norm.trim().split(' ').slice(-3).join(' ');
-    if (!lastWords.includes(st)) add('mineure', 'ordre', '—', `… ${ex.stationName}`, 'En auto-information, le message se termine par le nom du terrain.', 'usage');
+    const name = ex.stationName.split(' ')[0];
+    if (!fuzzyIn(words, name, words.length - 3, words.length, 0.2)) add('mineure', 'ordre', '—', `… ${ex.stationName}`, 'En auto-information, le message se termine par le nom du terrain.', 'usage');
   }
 
   // 3. Collationnement des valeurs
@@ -1497,8 +1550,8 @@ function localCheck(ex) {
       ok = left ? /gauche|left/.test(norm) : /droite|right/.test(norm);
       if (!ok && (left ? /droite|right/.test(norm) : /gauche|left/.test(norm))) said = left ? 'droite' : 'gauche';
     } else if (k === 'atis') {
-      const m = norm.match(/information\s+([a-z]+(?: [a-z]+)?)/);
-      ok = new RegExp(`information (${LETTER_RX[val]}|${val.toLowerCase()}\\b)`).test(norm);
+      const m = norm.match(/(?:informations?|info)\s+([a-z]+)/);
+      ok = new RegExp(`(informations?|info) (${LETTER_RX[val]}|${val.toLowerCase()}\\b)`).test(norm);
       if (!ok && m) said = m[1];
     } else if (k === 'freq') {
       ok = norm.replace(/\s/g, '').includes(val.replace(/\D/g, '').replace(/0+$/, ''));
