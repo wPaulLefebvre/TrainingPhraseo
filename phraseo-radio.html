@@ -1366,11 +1366,32 @@ function letterHits(norm, regLetters = '') {
       continue;
     }
     const w = tok + (words[i + 1] ? ` ${words[i + 1]}` : '');
+    let found = null;
     for (const [L, rx] of Object.entries(LETTER_RX)) {
-      if (new RegExp(`^(${rx})`).test(w)) { hits.push({ L, i }); break; }
+      if (new RegExp(`^(${rx})`).test(w)) { found = L; break; }
+    }
+    // Repli approximatif : « autel » ≈ hotel, « ciera » ≈ sierra, « julieth » ≈ juliett…
+    if (!found && tok.length >= 3 && !(tok in COMMON_WORDS)) found = fuzzyLetter(tok, words[i + 1]);
+    if (found) hits.push({ L: found, i });
+  }
+  return { hits, count: words.length, words };
+}
+
+const PHON_CANON = Object.fromEntries(Object.entries(PHON).map(([L, w]) => [L, strip(w.toLowerCase()).replace(/[^a-z]/g, '')]));
+PHON_CANON.A = 'alfa'; PHON_CANON.X = 'xray';
+const COMMON_WORDS = Object.fromEntries('bonjour parking personne personnes bord pour rouler destination information informations info piste vent arriere finale base point arret pret depart avec une les des est sud nord ouest pieds feet runway wind taxi ready holding final left right main gauche droite circuit toucher verticale terrain transit trafic vue numero roger wilco affirme negatif repetez'.split(' ').map((w) => [w, 1]));
+function fuzzyLetter(tok, next) {
+  const cands = [letters(tok)];
+  if (next) cands.push(letters(tok + next));
+  let best = null, bestD = 99;
+  for (const c of cands) {
+    for (const [L, w] of Object.entries(PHON_CANON)) {
+      const tol = w.length >= 5 ? 2 : 1;
+      const d = lev(c, w);
+      if (d <= tol && d < bestD) { best = L; bestD = d; }
     }
   }
-  return { hits, count: words.length };
+  return best;
 }
 
 // Cherche une suite de lettres (sous-séquence ordonnée et compacte) ; renvoie l'index du dernier mot ou -1
@@ -1387,6 +1408,21 @@ function findSeq(hits, letters) {
   }
   return -1;
 }
+// Nombre maximal de lettres de l'indicatif reconnues dans l'ordre (au plus une lettre manquante tolérée)
+function matchSeq(hits, target) {
+  let best = { n: 0, last: -1 };
+  for (let s = 0; s < hits.length; s++) {
+    let k = 0, n = 0, skipped = 0, last = -1;
+    for (let j = s; j < hits.length && k < target.length; j++) {
+      if (last >= 0 && hits[j].i - last > 3) break;
+      if (hits[j].L === target[k]) { k++; n++; last = hits[j].i; }
+      else if (skipped === 0 && k + 1 < target.length && hits[j].L === target[k + 1]) { skipped = 1; k += 2; n++; last = hits[j].i; }
+    }
+    if (n > best.n || (n === best.n && last > best.last)) best = { n, last };
+  }
+  return best;
+}
+
 function findSeqLast(hits, letters) {
   let res = -1;
   for (let s = 0; s < hits.length; s++) {
@@ -1494,17 +1530,26 @@ function localCheck(ex) {
   // 1. Indicatif
   const full = ex.cs.replace(/[^A-Z0-9]/gi, '').toUpperCase().split('');
   const abbrL = [full[0], ...full.slice(-2)];
-  const fullEnd = findSeqLast(hits, full);
+  let fullEnd = findSeqLast(hits, full);
   const abbrEnd = findSeqLast(hits, abbrL);
+  // Tolérance : une seule lettre non reconnue par la dictée, à condition qu'au moins une lettre du milieu soit présente
+  if (fullEnd < 0 && full.length >= 5) {
+    const m = matchSeq(hits, full);
+    if (m.n >= full.length - 1) {
+      fullEnd = m.last;
+      add('conseil', 'indicatif', '—', ex.cs, 'Une lettre de l\'indicatif n\'a pas été reconnue (probablement la dictée) : vérifie la transcription.');
+    }
+  }
+  const heard = hits.filter((h) => full.includes(h.L)).map((h) => PHON[h.L]).join(' ');
   const csEnd = Math.max(fullEnd, abbrEnd);
   const csSpoken = full.map((l) => PHON[l]).join(' ');
   const abbrSpoken = abbrL.map((l) => PHON[l]).join(' ');
   if (csEnd < 0) {
     add('majeure', 'indicatif', '—', ex.abbr ? `${ex.csA} (${abbrSpoken})` : `${ex.cs} (${csSpoken})`,
-      'Indicatif absent ou erroné : il doit figurer dans chaque transmission, en alphabet phonétique.');
+      `Indicatif absent ou erroné : il doit figurer dans chaque transmission, en alphabet phonétique.${heard ? ` Lettres reconnues : ${heard}.` : ''}`);
   } else if (!ex.abbr && fullEnd < 0) {
     add('majeure', 'indicatif', ex.csA, `${ex.cs} (${csSpoken})`,
-      'Indicatif complet obligatoire tant que la station ne l\'a pas abrégé elle-même.');
+      `Indicatif complet obligatoire tant que la station ne l'a pas abrégé elle-même.${heard ? ` Lettres reconnues : ${heard}.` : ''}`);
   }
   if (ex.rb.includes('cs')) coll.push({ element: RB_LABELS.cs, attendu: ex.cs, entendu: fullEnd >= 0 ? ex.cs : (abbrEnd >= 0 ? ex.csA : 'absent'), ok: fullEnd >= 0 });
   // Indicatif en fin de collationnement
