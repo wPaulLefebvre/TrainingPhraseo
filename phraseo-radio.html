@@ -1,0 +1,2152 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#2B2F33">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Phraséo">
+  <meta name="description" content="Entraînement à la phraséologie radio VFR (ATIS, AFIS, auto-information) selon le manuel DSNA.">
+  <title>Phraséo Radio</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=B612:wght@400;700&family=B612+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+/* Phraséo Radio — façade de radio VHF en haut, planchette de genou (kneeboard) en dessous.
+   Typo : B612 / B612 Mono, polices conçues pour les écrans de cockpit. */
+
+:root {
+  --panel: #2B2F33;
+  --panel-edge: #1C1F22;
+  --bezel: #3B4046;
+  --lcd-bg: #1A1408;
+  --lcd: #F2A23A;
+  --lcd-dim: #6E4F22;
+  --paper: #ECEAE4;
+  --paper-line: #C9D3DD;
+  --margin-line: #D9A3A0;
+  --ink: #1F2A3A;
+  --ink-soft: #586273;
+  --red: #B8322A;
+  --ok: #2E7448;
+  --warn: #9A6A12;
+  --font: 'B612', 'Avenir Next', 'Segoe UI', system-ui, sans-serif;
+  --mono: 'B612 Mono', 'SF Mono', Menlo, Consolas, monospace;
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-t: env(safe-area-inset-top, 0px);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--panel);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 16px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+button { font-family: inherit; font-size: inherit; color: inherit; cursor: pointer; }
+button:focus-visible, textarea:focus-visible, input:focus-visible, select:focus-visible {
+  outline: 2px solid var(--lcd); outline-offset: 2px;
+}
+
+.app { display: flex; flex-direction: column; min-height: 100%; max-width: 640px; margin: 0 auto; }
+
+/* ── Façade radio ─────────────────────────────────────────────── */
+.radio {
+  position: sticky; top: 0; z-index: 10;
+  padding: calc(var(--safe-t) + 10px) 12px 12px;
+  background:
+    radial-gradient(circle at 8px 8px, #4a5057 1.5px, transparent 2px) 0 0 / 100% 100% no-repeat,
+    linear-gradient(#33383d, var(--panel));
+  border-bottom: 3px solid var(--panel-edge);
+}
+.radio-top { display: grid; grid-template-columns: 44px 1fr auto; gap: 10px; align-items: center; }
+.knob {
+  width: 44px; height: 44px; border-radius: 50%; border: 0; padding: 0;
+  background: conic-gradient(from 20deg, #555b62, #2a2e33, #555b62, #2a2e33, #555b62);
+  box-shadow: 0 2px 0 var(--panel-edge), inset 0 0 0 2px #1e2124;
+}
+.knob-face { display: block; width: 22px; height: 22px; margin: 11px; border-radius: 50%; background: #23272b; position: relative; }
+.knob-face::after { content: ''; position: absolute; left: 10px; top: 2px; width: 2px; height: 8px; background: var(--lcd); }
+.lcd {
+  background: var(--lcd-bg);
+  border: 2px solid var(--bezel);
+  border-radius: 4px;
+  padding: 6px 10px;
+  font-family: var(--mono);
+  color: var(--lcd);
+  text-shadow: 0 0 6px rgba(242, 162, 58, .35);
+  min-width: 0;
+}
+.lcd-row { display: flex; gap: 12px; align-items: baseline; white-space: nowrap; overflow: hidden; }
+.lcd-main { font-size: 15px; font-weight: 700; justify-content: space-between; }
+.lcd-main span:first-child { overflow: hidden; text-overflow: ellipsis; }
+.lcd-sub { font-size: 13px; color: var(--lcd); opacity: .85; }
+.lcd-sub span:empty { display: none; }
+.lamp { flex: none; width: 9px; height: 9px; border-radius: 50%; background: var(--lcd-dim); }
+.lamp.rx { background: #64d27c; box-shadow: 0 0 8px #64d27c; }
+.lamp.tx { background: #ff5a4a; box-shadow: 0 0 8px #ff5a4a; }
+.radio-buttons { display: flex; flex-direction: column; gap: 6px; }
+.hw {
+  font-family: var(--mono); font-size: 11px; letter-spacing: .04em;
+  background: #23272b; color: #c9ccd0; border: 1px solid #4a5057; border-radius: 3px;
+  padding: 4px 8px; box-shadow: 0 2px 0 var(--panel-edge);
+}
+.hw:active { transform: translateY(1px); box-shadow: none; }
+
+/* ── Planchette ───────────────────────────────────────────────── */
+main {
+  flex: 1;
+  background:
+    linear-gradient(90deg, transparent 30px, var(--margin-line) 30px, var(--margin-line) 31px, transparent 31px),
+    repeating-linear-gradient(var(--paper) 0 27px, var(--paper-line) 27px 28px);
+  background-color: var(--paper);
+  padding: 18px 16px calc(24px + var(--safe-b)) 42px;
+  border-radius: 10px 10px 0 0;
+  margin-top: -2px;
+  box-shadow: 0 -2px 0 #b9b6ae inset;
+}
+
+h1, h2, h3 { font-weight: 700; line-height: 1.2; margin: 0; }
+h2 { font-size: 22px; margin-bottom: 4px; }
+h3 { font-size: 16px; margin: 22px 0 8px; color: var(--ink-soft); }
+p { margin: 0 0 10px; max-width: 70ch; }
+
+/* Accueil */
+.setup { display: grid; gap: 10px; margin-bottom: 14px; }
+.seg { display: grid; grid-template-columns: 1fr 1fr; border: 1.5px solid var(--ink); border-radius: 6px; overflow: hidden; }
+.seg button { border: 0; background: transparent; padding: 10px 6px; font-weight: 700; }
+.seg button + button { border-left: 1.5px solid var(--ink); }
+.seg button[aria-checked="true"] { background: var(--ink); color: var(--paper); }
+.mode-help { font-size: 14px; color: var(--ink-soft); }
+
+.notice {
+  border-left: 3px solid var(--red); background: rgba(184, 50, 42, .06);
+  padding: 8px 12px; margin-bottom: 12px; font-size: 14px;
+}
+.notice button { background: none; border: 0; padding: 0; color: var(--red); font-weight: 700; text-decoration: underline; }
+
+.scn {
+  display: block; width: 100%; text-align: left;
+  background: rgba(255, 255, 255, .55); border: 1px solid #c4c2bb; border-radius: 6px;
+  padding: 12px 14px; margin-bottom: 8px;
+}
+.scn:active { background: rgba(255, 255, 255, .9); }
+.scn strong { display: block; font-size: 16px; }
+.scn span { display: block; font-size: 14px; color: var(--ink-soft); }
+.scn .last { font-family: var(--mono); font-size: 12px; margin-top: 4px; color: var(--ink-soft); }
+.disclaimer { font-size: 12px; color: var(--ink-soft); margin-top: 22px; }
+
+/* Session : journal des échanges */
+.session-head { margin-bottom: 14px; }
+.session-head p { color: var(--ink-soft); font-size: 14px; margin: 2px 0 0; }
+.log { display: grid; gap: 12px; padding-bottom: 8px; }
+.msg { font-family: var(--mono); font-size: 15px; line-height: 1.5; }
+.msg .who { display: block; font-family: var(--font); font-size: 12px; color: var(--ink-soft); }
+.msg.station { padding-left: 10px; border-left: 3px solid var(--ink); }
+.msg.other { padding-left: 10px; border-left: 3px dashed var(--ink-soft); color: var(--ink-soft); }
+.msg.pilot { padding-left: 10px; border-left: 3px solid var(--lcd-dim); }
+.msg .hidden-text { color: var(--ink-soft); font-family: var(--font); font-size: 14px; }
+.msg .reveal { background: none; border: 0; padding: 0; color: var(--ink); text-decoration: underline; font-family: var(--font); font-size: 14px; }
+.atis-text { white-space: pre-line; }
+
+.sit {
+  background: rgba(255, 255, 255, .7); border: 1.5px solid var(--ink); border-radius: 6px;
+  padding: 10px 12px; font-size: 15px;
+}
+.sit .src { display: block; font-size: 12px; color: var(--ink-soft); margin-top: 4px; }
+.hint { margin-top: 8px; font-family: var(--mono); font-size: 14px; color: var(--ink-soft); }
+.hint[hidden] { display: none; }
+.link { background: none; border: 0; padding: 0; color: var(--ink); text-decoration: underline; font-size: 14px; }
+
+/* Correction au stylo rouge */
+.eval { border-radius: 6px; padding: 10px 12px; background: rgba(255, 255, 255, .75); border: 1px solid #c4c2bb; }
+.eval-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.verdict { font-weight: 700; }
+.verdict.correct { color: var(--ok); }
+.verdict.acceptable { color: var(--warn); }
+.verdict.incorrect { color: var(--red); }
+.score { font-family: var(--mono); font-weight: 700; font-size: 18px; }
+.rb { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.rb span { font-family: var(--mono); font-size: 12px; padding: 2px 7px; border-radius: 3px; border: 1px solid currentColor; }
+.rb .ok { color: var(--ok); }
+.rb .ko { color: var(--red); }
+.err { margin: 8px 0 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.err li { font-size: 14px; border-left: 2px solid var(--red); padding-left: 8px; }
+.err li.mineure { border-left-color: var(--warn); }
+.err li.conseil { border-left-color: var(--ink-soft); }
+.err s { color: var(--red); text-decoration-thickness: 2px; font-family: var(--mono); }
+.err ins { text-decoration: none; color: var(--ok); font-family: var(--mono); font-weight: 700; }
+.err small { display: block; color: var(--ink-soft); }
+.fixed { font-family: var(--mono); font-size: 14px; margin-top: 10px; color: var(--ok); }
+.comment { font-size: 14px; color: var(--ink-soft); margin-top: 8px; }
+.local-tag { font-size: 12px; color: var(--warn); }
+
+/* Dock de transmission */
+.dock {
+  position: sticky; bottom: 0; margin: 12px -16px calc(-24px - var(--safe-b)) -42px;
+  padding: 12px 16px calc(14px + var(--safe-b));
+  background: var(--panel); color: #e8e6e1;
+  border-top: 3px solid var(--panel-edge);
+  display: grid; gap: 10px;
+}
+.dock textarea {
+  width: 100%; min-height: 64px; resize: vertical;
+  font-family: var(--mono); font-size: 15px;
+  background: var(--lcd-bg); color: var(--lcd); border: 2px solid var(--bezel); border-radius: 4px; padding: 8px;
+}
+.dock textarea::placeholder { color: var(--lcd-dim); }
+.dock-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; }
+.ptt {
+  height: 64px; border-radius: 8px; border: 0;
+  background: linear-gradient(#3b4046, #2a2e33);
+  box-shadow: 0 4px 0 var(--panel-edge), inset 0 0 0 2px #4d535a;
+  color: #e8e6e1; font-weight: 700; font-size: 17px;
+  touch-action: none; user-select: none; -webkit-user-select: none;
+}
+.ptt.on { background: #7a1f19; box-shadow: 0 1px 0 var(--panel-edge), inset 0 0 0 2px #ff5a4a; transform: translateY(3px); }
+.ptt:disabled { opacity: .5; }
+.btn {
+  border-radius: 6px; padding: 12px 16px; font-weight: 700; border: 1.5px solid var(--ink);
+  background: transparent;
+}
+.btn.primary { background: var(--ink); color: var(--paper); }
+.dock .btn { border-color: var(--lcd); color: var(--lcd); }
+.dock .btn.primary { background: var(--lcd); color: var(--lcd-bg); }
+.btn:disabled { opacity: .45; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.dock-note { font-size: 12px; color: #a9adb2; margin: 0; }
+
+/* Quiz ATIS */
+.quiz { display: grid; gap: 10px; }
+.quiz label { display: grid; grid-template-columns: 120px 1fr auto; gap: 8px; align-items: center; font-size: 14px; }
+.quiz input { font-family: var(--mono); font-size: 16px; padding: 8px; border: 1.5px solid var(--ink); border-radius: 4px; background: #fff; min-width: 0; }
+.quiz .res { font-family: var(--mono); font-size: 13px; }
+.quiz .res.ok { color: var(--ok); }
+.quiz .res.ko { color: var(--red); }
+
+/* Réglages & historique */
+.form { display: grid; gap: 14px; }
+.field { display: grid; gap: 4px; }
+.field > span { font-size: 14px; font-weight: 700; }
+.field small { color: var(--ink-soft); font-size: 13px; }
+.field input, .field select {
+  font-family: var(--mono); font-size: 16px; padding: 10px; border: 1.5px solid var(--ink); border-radius: 4px; background: #fff; width: 100%;
+}
+.pair { display: grid; grid-template-columns: 1.3fr 1fr; gap: 8px; }
+.usage { font-family: var(--mono); font-size: 13px; }
+
+.hist-item { border-bottom: 1px solid #c4c2bb; padding: 10px 0; }
+.hist-item summary { list-style: none; display: grid; grid-template-columns: 1fr auto; gap: 8px; cursor: pointer; }
+.hist-item summary::-webkit-details-marker { display: none; }
+.hist-item .meta { font-size: 13px; color: var(--ink-soft); }
+.hist-item .score { font-size: 16px; }
+.recurring { margin: 0 0 6px; padding-left: 18px; }
+.recurring li { font-size: 14px; margin-bottom: 4px; }
+.bar { display: grid; grid-template-columns: 130px 1fr 32px; gap: 8px; align-items: center; font-size: 13px; margin-bottom: 4px; }
+.bar i { display: block; height: 8px; background: var(--red); border-radius: 2px; }
+.empty { color: var(--ink-soft); }
+
+.spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--ink-soft); border-top-color: transparent; border-radius: 50%; animation: spin .8s linear infinite; vertical-align: -2px; margin-right: 6px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner { animation-duration: 2.4s; }
+  .ptt.on { transform: none; }
+}
+@media (min-width: 640px) {
+  main { border-radius: 10px; margin-bottom: 20px; }
+}
+
+</style>
+</head>
+<body>
+  <div class="app">
+    <!-- Façade radio : toujours visible -->
+    <header class="radio" id="radio">
+      <div class="radio-top">
+        <button class="knob" id="btn-home" aria-label="Retour aux exercices">
+          <span class="knob-face"></span>
+        </button>
+        <div class="lcd" id="lcd" aria-live="polite">
+          <div class="lcd-row lcd-main">
+            <span id="lcd-station">PHRASÉO RADIO</span>
+            <span class="lamp" id="lamp" aria-hidden="true"></span>
+          </div>
+          <div class="lcd-row lcd-sub">
+            <span id="lcd-freq">— — —</span>
+            <span id="lcd-info"></span>
+            <span id="lcd-qnh"></span>
+          </div>
+        </div>
+        <div class="radio-buttons">
+          <button class="hw" id="btn-history" aria-label="Historique">HIST</button>
+          <button class="hw" id="btn-settings" aria-label="Réglages">SET</button>
+        </div>
+      </div>
+    </header>
+
+    <main id="screen"></main>
+  </div>
+
+  <template id="tpl-home">
+    <section class="home">
+      <div class="setup">
+        <div class="seg" role="radiogroup" aria-label="Langue">
+          <button data-lang="fr" role="radio">Français</button>
+          <button data-lang="en" role="radio">English</button>
+        </div>
+        <div class="seg" role="radiogroup" aria-label="Mode">
+          <button data-mode="debutant" role="radio">Débutant</button>
+          <button data-mode="experimente" role="radio">Expérimenté</button>
+        </div>
+        <p class="mode-help" id="mode-help"></p>
+        <p class="mode-help" id="engine-line"></p>
+      </div>
+      <div id="notices"></div>
+      <div id="scenario-list"></div>
+      <p class="disclaimer">Pistes et fréquences des aérodromes sont indicatives : la référence reste la carte VAC du SIA. Phraséologie basée sur le Manuel DSNA, 10e édition (avril 2023).</p>
+    </section>
+  </template>
+
+  <script type="module">
+// ===== aerodromes.js =====
+// Données d'aérodromes de Nouvelle-Aquitaine utilisées pour générer les exercices.
+// ⚠️ INDICATIVES : pistes et fréquences sont à vérifier et corriger sur les cartes VAC
+// du SIA (https://www.sia.aviation-civile.gouv.fr) avant de s'y fier. Modifie librement ce fichier.
+//
+// kind : 'afis' (AFIS ouvert), 'twr' (tour de contrôle), 'auto' (auto-information)
+// rwys : les deux QFU de la piste principale, sous forme "11" / "29"
+
+const AERODROMES = [
+  // Aérodromes AFIS
+  { oaci: 'LFBX', name: 'Périgueux', full: 'Périgueux-Bassillac', kind: 'afis', rwys: ['11', '29'], freq: '119.255' },
+  { oaci: 'LFCH', name: 'Arcachon', full: 'Arcachon-La Teste-de-Buch', kind: 'afis', rwys: ['10', '28'], freq: '118.375' },
+  { oaci: 'LFBU', name: 'Angoulême', full: 'Angoulême-Brie-Champniers', kind: 'afis', rwys: ['10', '28'], freq: '118.350' },
+  { oaci: 'LFBN', name: 'Niort', full: 'Niort-Souché', kind: 'afis', rwys: ['07', '25'], freq: '118.200' },
+  { oaci: 'LFCY', name: 'Royan', full: 'Royan-Médis', kind: 'afis', rwys: ['10', '28'], freq: '118.550' },
+  { oaci: 'LFSL', name: 'Brive', full: 'Brive-Souillac', kind: 'afis', rwys: ['11', '29'], freq: '119.400' },
+
+  // Aérodromes contrôlés
+  { oaci: 'LFBE', name: 'Bergerac', full: 'Bergerac-Dordogne-Périgord', kind: 'twr', rwys: ['10', '28'], freq: '120.150' },
+  { oaci: 'LFBH', name: 'La Rochelle', full: 'La Rochelle-Île de Ré', kind: 'twr', rwys: ['09', '27'], freq: '118.200' },
+  { oaci: 'LFBA', name: 'Agen', full: 'Agen-La Garenne', kind: 'twr', rwys: ['11', '29'], freq: '118.100' },
+
+  // Aérodromes en auto-information
+  { oaci: 'LFCD', name: 'Andernos', full: 'Andernos-les-Bains', kind: 'auto', rwys: ['08', '26'], freq: '123.500' },
+  { oaci: 'LFDK', name: 'Soulac', full: 'Soulac-sur-Mer', kind: 'auto', rwys: ['10', '28'], freq: '123.500' },
+  { oaci: 'LFDI', name: 'Libourne', full: 'Libourne-Artigues-de-Lussac', kind: 'auto', rwys: ['09', '27'], freq: '123.500' },
+  { oaci: 'LFCS', name: 'Léognan', full: 'Bordeaux-Léognan-Saucats', kind: 'auto', rwys: ['06', '24'], freq: '123.500' },
+];
+
+// ===== radio.js =====
+// Génération du contexte d'un exercice et mise en forme radio (affichage + énonciation vocale).
+// Règles d'énonciation tirées du Manuel de phraséologie DSNA (10e éd., avril 2023), chapitre 2.E.
+
+
+const PHON = {
+  A: 'Alfa', B: 'Bravo', C: 'Charlie', D: 'Delta', E: 'Echo', F: 'Fox', G: 'Golf', H: 'Hotel',
+  I: 'India', J: 'Juliett', K: 'Kilo', L: 'Lima', M: 'Mike', N: 'November', O: 'Oscar', P: 'Papa',
+  Q: 'Québec', R: 'Roméo', S: 'Sierra', T: 'Tango', U: 'Uniform', V: 'Victor', W: 'Whiskey',
+  X: 'X-ray', Y: 'Yankee', Z: 'Zulu',
+};
+const EN_DIGITS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'niner'];
+const FR_DIGITS = ['zéro', 'un', 'deux', 'trois', 'quatre', 'cinq', 'six', 'sept', 'huit', 'neuf'];
+
+const rnd = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+const pad = (n, l = 2) => String(n).padStart(l, '0');
+
+const digitsEN = (s) => String(s).split('').map((c) => (/\d/.test(c) ? EN_DIGITS[+c] : c)).join(' ');
+const digitsFR = (s) => String(s).split('').map((c) => (/\d/.test(c) ? FR_DIGITS[+c] : c)).join(' ');
+const spellPhon = (s) => String(s).toUpperCase().replace(/[^A-Z0-9]/g, '').split('')
+  .map((c) => PHON[c] || EN_DIGITS[+c]).join(' ');
+
+// Indicatif abrégé (type a) : premier caractère + deux derniers (GM1 SERA.14050)
+function abbreviate(reg) {
+  const clean = reg.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return `${clean[0]}-${clean.slice(-2)}`;
+}
+
+// Altitude en anglais : milliers "thousand", centaines "hundred"
+function altEN(n) {
+  const th = Math.floor(n / 1000), hu = Math.floor((n % 1000) / 100);
+  let s = '';
+  if (th) s += `${digitsEN(th)} thousand`;
+  if (hu) s += `${s ? ' ' : ''}${digitsEN(hu)} hundred`;
+  return s || digitsEN(n);
+}
+const fmtThousands = (n) => (n >= 1000 ? `${Math.floor(n / 1000)} ${pad(n % 1000, 3)}` : String(n));
+
+// QNH anglais : 1000 → "one thousand", sinon chiffre par chiffre
+const qnhEN = (q) => (q % 1000 === 0 ? `${digitsEN(q / 1000)} thousand` : digitsEN(q));
+
+// Fréquence : 5e et 6e chiffres non énoncés s'ils valent zéro
+function freqSpokenEN(f) {
+  let [a, b] = f.split('.');
+  b = b.replace(/0+$/, '') || '0';
+  return `${digitsEN(a)} decimal ${digitsEN(b)}`;
+}
+function freqSpokenFR(f) {
+  let [a, b] = f.split('.');
+  b = b.replace(/0+$/, '') || '0';
+  return `${a} décimale ${b}`;
+}
+
+const DIRS = [
+  { fr: 'au nord', en: 'north', deg: 0 }, { fr: 'au nord-est', en: 'north-east', deg: 45 },
+  { fr: "à l'est", en: 'east', deg: 90 }, { fr: 'au sud-est', en: 'south-east', deg: 135 },
+  { fr: 'au sud', en: 'south', deg: 180 }, { fr: 'au sud-ouest', en: 'south-west', deg: 225 },
+  { fr: "à l'ouest", en: 'west', deg: 270 }, { fr: 'au nord-ouest', en: 'north-west', deg: 315 },
+];
+
+const TRAFFIC = [
+  { d: 'DR400', fr: 'D R quatre cents', en: 'D R four hundred' },
+  { d: 'Cessna 172', fr: 'Cessna cent soixante-douze', en: 'Cessna one seven two' },
+  { d: 'PA28', fr: 'P A vingt-huit', en: 'P A two eight' },
+  { d: 'Robin DR500', fr: 'Robin D R cinq cents', en: 'Robin D R five hundred' },
+  { d: 'ULM', fr: 'U L M', en: 'microlight' },
+];
+
+const REMARKS = [
+  null, null,
+  { fr: 'Activité parachutage en cours, verticale terrain, jusqu\'au niveau 120', en: 'Parachute activity in progress overhead the aerodrome up to level 120' },
+  { fr: 'PAPI piste {rwy} en panne', en: 'PAPI runway {rwy} unserviceable' },
+  { fr: 'Péril aviaire', en: 'Bird hazard' },
+  { fr: 'Travaux en bordure de piste {rwy}', en: 'Work in progress next to runway {rwy}' },
+];
+
+const CLOUDS = [
+  { cavok: true },
+  { fr: 'peu', en: 'few', h: [1500, 2000, 2500, 3000, 3500] },
+  { fr: 'épars', en: 'scattered', h: [2000, 2500, 3000, 4000] },
+  { fr: 'fragmentés', en: 'broken', h: [3000, 3500, 4500] },
+];
+
+// Valeur à double forme : affichée (d) et énoncée (s), éventuellement par langue
+const v = (d, s = d) => ({ d, s });
+const vl = (fr, en) => ({ fr, en });
+
+function pickRunway(ad, windDir) {
+  // Choisit le QFU le plus face au vent
+  let best = ad.rwys[0], bestDiff = 999;
+  for (const r of ad.rwys) {
+    const diff = Math.abs(((+r * 10 - windDir + 540) % 360) - 180);
+    if (diff < bestDiff) { bestDiff = diff; best = r; }
+  }
+  return best;
+}
+
+function aircraftList(settings) {
+  return (settings.aircraft || []).filter((a) => a.reg && a.reg.replace(/[^A-Z0-9]/gi, '').length >= 4);
+}
+
+function buildContext(scn, settings) {
+  const pool = AERODROMES.filter((a) => a.kind === scn.adKind);
+  const preferred = settings.homeAd && pool.find((a) => a.oaci === settings.homeAd);
+  const ad = scn.allowHome && preferred && Math.random() < 0.4 ? preferred : pick(pool);
+  const others = AERODROMES.filter((a) => a.oaci !== ad.oaci);
+  const from = pick(others);
+  const to = pick(others.filter((a) => a.oaci !== from.oaci));
+
+  const acList = aircraftList(settings);
+  const ac = acList.length ? pick(acList) : { reg: 'F-GABC', type: 'DR400' };
+  const reg = ac.reg.toUpperCase().replace(/\s/g, '');
+  const regClean = reg.replace(/[^A-Z0-9]/g, '');
+  const regDisp = regClean.length > 1 ? `${regClean[0]}-${regClean.slice(1)}` : reg;
+  const abbr = abbreviate(reg);
+
+  const windDir = rnd(0, 35) * 10 || 360;
+  const windSpd = rnd(3, 14);
+  const gust = Math.random() < 0.15 ? windSpd + rnd(8, 12) : null;
+  const rwy = pickRunway(ad, windDir);
+  const qnh = rnd(1004, 1029);
+  const atis = String.fromCharCode(65 + rnd(0, 25));
+  const now = new Date();
+  const recMin = Math.max(0, now.getUTCMinutes() - rnd(5, 25));
+  const recTime = `${pad(now.getUTCHours())}${pad(Math.floor(recMin / 10) * 10)}`;
+  const temp = rnd(4, 27);
+  const dew = temp - rnd(1, 9);
+  const cloud = pick(CLOUDS);
+  const cloudH = cloud.cavok ? null : pick(cloud.h);
+  const vis = cloud.cavok ? null : pick([10, 10, 9, 8, 7]);
+  const side = Math.random() < 0.7 ? 'gauche' : 'droite';
+  const dir = pick(DIRS);
+  const dist = rnd(8, 15);
+  const alt = pick([1500, 2000, 2500, 3000]);
+  const etaMin = (now.getUTCMinutes() + rnd(6, 12)) % 60;
+  const pob = rnd(1, 3);
+  const hdg = (dir.deg + 180) % 360; // vers le terrain
+  const traffic = pick(TRAFFIC);
+  const remark = pick(REMARKS);
+  const exitDir = pick(DIRS);
+
+  const windFR = `${pad(windDir, 3)} degrés, ${windSpd} nœuds${gust ? `, rafales ${gust} nœuds` : ''}`;
+  const windFRs = `${digitsFR(pad(windDir, 3))} degrés, ${windSpd} nœuds${gust ? `, rafales ${gust} nœuds` : ''}`;
+  const windEN = `${pad(windDir, 3)} degrees, ${windSpd} knots${gust ? ` gusting ${gust} knots` : ''}`;
+  const windENs = `${digitsEN(pad(windDir, 3))} degrees, ${digitsEN(windSpd)} knots${gust ? ` gusting ${digitsEN(gust)} knots` : ''}`;
+
+  const stName = {
+    afis: vl(v(`${ad.name} Information`), v(`${ad.name} Information`)),
+    twr: vl(v(`${ad.name} Tour`), v(`${ad.name} Tower`)),
+    auto: vl(v(ad.name), v(`${ad.name} traffic`)),
+  }[ad.kind];
+
+  const vars = {
+    cs: v(regDisp, spellPhon(regClean)),
+    csA: v(abbr, spellPhon(abbr)),
+    type: v(ac.type || 'DR400'),
+    st: stName,
+    ad: v(ad.name),
+    from: v(from.name),
+    to: v(to.name),
+    rwy: vl(v(rwy, rwy.startsWith('0') ? digitsFR(rwy) : rwy), v(rwy, digitsEN(rwy))),
+    qnh: vl(v(String(qnh), String(qnh)), v(String(qnh), qnhEN(qnh))),
+    atis: v(atis, PHON[atis]),
+    wind: vl(v(windFR, windFRs), v(windEN, windENs)),
+    side: vl(v(side), v(side === 'gauche' ? 'left-hand' : 'right-hand')),
+    pos: vl(v(`${dist} NM ${dir.fr} de ${ad.name}`, `${dist} nautiques ${dir.fr} de ${ad.name}`),
+      v(`${dist} NM ${dir.en} of ${ad.name}`, `${digitsEN(dist)} miles ${dir.en} of ${ad.name}`)),
+    alt: vl(v(`${fmtThousands(alt)} pieds`), v(`${fmtThousands(alt)} feet`, `${altEN(alt)} feet`)),
+    altT: vl(v(`${fmtThousands(alt + 500)} pieds`), v(`${fmtThousands(alt + 500)} feet`, `${altEN(alt + 500)} feet`)),
+    eta: vl(v(pad(etaMin)), v(pad(etaMin), digitsEN(pad(etaMin)))),
+    pob: vl(v(`${pob} personne${pob > 1 ? 's' : ''} à bord`), v(`${pob} person${pob > 1 ? 's' : ''} on board`)),
+    hdg: vl(v(pad(hdg || 360, 3), digitsFR(pad(hdg || 360, 3))), v(pad(hdg || 360, 3), digitsEN(pad(hdg || 360, 3)))),
+    traf: vl(v(traffic.d, traffic.fr), v(traffic.d, traffic.en)),
+    freq: vl(v(ad.freq.replace('.', ','), freqSpokenFR(ad.freq)), v(ad.freq, freqSpokenEN(ad.freq))),
+    exit: vl(v(exitDir.fr.replace(/^(au |à l')/, (m) => (m === 'au ' ? 'le ' : "l'"))), v(exitDir.en)),
+  };
+
+  const ctx = {
+    ad, from, to, reg: regDisp, abbr, acType: ac.type, rwy, qnh, atis, windDir, windSpd, gust, temp, dew,
+    side, recTime, cloud, cloudH, vis, remark, vars,
+    // Valeurs clés exposées pour le contrôle des collationnements
+    keys: { rwy, qnh: String(qnh), atis, side, csA: abbr, cs: regDisp, freq: ad.freq },
+  };
+  ctx.atisText = { fr: buildAtis(ctx, 'fr'), en: buildAtis(ctx, 'en') };
+  return ctx;
+}
+
+// Remplace {clé} par la forme affichée (d) ou énoncée (s) dans la langue demandée
+function render(tpl, ctx, lang, form = 'd') {
+  const out = tpl.replace(/\{(\w+)\}/g, (m, k) => {
+    const val = ctx.vars[k];
+    if (!val) return m;
+    const byLang = val.fr || val.en ? val[lang] || val.fr : val;
+    return byLang[form];
+  });
+  // Élision française : « de Arcachon » → « d'Arcachon »
+  let res = lang === 'fr' ? out.replace(/\bde (?=[AEIOUYÂÉÈÊÎÔ])/g, "d'") : out;
+  // Sigles épelés pour la synthèse vocale (manuel, chap. 2.D)
+  if (form === 's') res = res.replace(/\bQNH\b/g, 'Q N H').replace(/\bVFR\b/g, 'V F R').replace(/\bPAPI\b/g, 'Papi');
+  return res;
+}
+
+function buildAtis(ctx, lang) {
+  const { ad, atis, recTime, rwy, temp, dew, qnh, cloud, cloudH, vis, remark } = ctx;
+  const lines = [];
+  if (lang === 'fr') {
+    lines.push(v(`Bonjour, ici ${ad.name}, information ${atis}`, `Bonjour, ici ${ad.name}, information ${PHON[atis]}`));
+    lines.push(v(`Enregistrée à ${recTime} UTC`, `Enregistrée à ${digitsFR(recTime)} U T C`));
+    lines.push(v(`Piste en service ${rwy}`, `Piste en service ${rwy.startsWith('0') ? digitsFR(rwy) : rwy}`));
+    if (remark) lines.push(v(remark.fr.replace('{rwy}', rwy)));
+    lines.push(v(`Vent ${ctx.vars.wind.fr.d}`, `Vent ${ctx.vars.wind.fr.s}`));
+    if (cloud.cavok) lines.push(v('CAVOK', 'Cav O K'));
+    else {
+      lines.push(v(`Visibilité ${vis === 10 ? '10 kilomètres ou plus' : `${vis} kilomètres`}`));
+      lines.push(v(`Nuages ${cloud.fr} ${fmtThousands(cloudH)} pieds`));
+    }
+    lines.push(v(`Température ${temp}, point de rosée ${dew}`, `Température ${temp < 0 ? 'moins ' + -temp : temp}, point de rosée ${dew < 0 ? 'moins ' + -dew : dew}`));
+    lines.push(v(`QNH ${qnh}`, `Q N H ${qnh}`));
+    lines.push(v(`Informez ${ad.name} dès le premier contact que vous avez reçu l'information ${atis}`,
+      `Informez ${ad.name} dès le premier contact que vous avez reçu l'information ${PHON[atis]}`));
+  } else {
+    lines.push(v(`Good morning, this is ${ad.name} information ${atis}`, `Good morning, this is ${ad.name} information ${PHON[atis]}`));
+    lines.push(v(`Recorded at ${recTime} UTC`, `Recorded at ${digitsEN(recTime)} U T C`));
+    lines.push(v(`Runway in use ${rwy}`, `Runway in use ${digitsEN(rwy)}`));
+    if (remark) lines.push(v(remark.en.replace('{rwy}', rwy), remark.en.replace('{rwy}', digitsEN(rwy))));
+    lines.push(v(`Wind ${ctx.vars.wind.en.d}`, `Wind ${ctx.vars.wind.en.s}`));
+    if (cloud.cavok) lines.push(v('CAVOK', 'Cav O K'));
+    else {
+      lines.push(v(`Visibility ${vis === 10 ? '10 kilometres or more' : `${vis} kilometres`}`,
+        `Visibility ${vis === 10 ? 'one zero kilometres or more' : `${digitsEN(vis)} kilometres`}`));
+      lines.push(v(`Clouds ${cloud.en} ${fmtThousands(cloudH)} feet`, `Clouds ${cloud.en} ${altEN(cloudH)} feet`));
+    }
+    const tEN = (t) => (t < 0 ? `minus ${digitsEN(-t)}` : digitsEN(t));
+    lines.push(v(`Temperature ${temp}, dew point ${pad(dew)}`, `Temperature ${tEN(temp)}, dew point ${tEN(dew)}`));
+    lines.push(v(`QNH ${qnh}`, `Q N H ${qnhEN(qnh)}`));
+    lines.push(v(`Inform ${ad.name} on initial contact you have received information ${atis}`,
+      `Inform ${ad.name} on initial contact you have received information ${PHON[atis]}`));
+  }
+  return { d: lines.map((l) => l.d).join('.\n') + '.', s: lines.map((l) => l.s).join('. ') + '.' };
+}
+
+// ===== scenarios.js =====
+// Scénarios d'entraînement VFR (programme PPL).
+// Types d'étapes :
+//   atis  : diffusion ATIS (synthèse vocale)
+//   quiz  : relevé des éléments ATIS
+//   st    : message de la station (AFIS / Tour)
+//   other : message d'un autre aéronef (auto-information)
+//   pi    : transmission du pilote, évaluée
+// Champs d'une étape pilote :
+//   sit  : situation affichée (français)
+//   fr/en: réponse modèle (indicative, d'autres formulations conformes sont acceptées)
+//   rb   : éléments à collationner ou à annoncer impérativement
+//   abbr : l'indicatif abrégé est-il autorisé à ce stade (la station l'a déjà employé)
+//   src  : 'manuel' (manuel DSNA) ou 'usage' (pratique courante hors manuel)
+
+const RB_LABELS = {
+  rwy: 'Piste', qnh: 'QNH', side: 'Main du circuit', atis: "Information ATIS", cs: 'Indicatif complet', freq: 'Fréquence',
+};
+
+const SCENARIOS = [
+  {
+    id: 'atis', group: 'ATIS', adKind: 'afis', allowHome: true,
+    title: "Écoute d'un ATIS",
+    desc: "Écoute le message et relève lettre, piste, vent, QNH et température.",
+    steps: [{ t: 'atis' }, { t: 'quiz' }],
+  },
+
+  {
+    id: 'afis-dep', group: 'AFIS', adKind: 'afis', allowHome: true,
+    title: 'Départ d\'un aérodrome AFIS',
+    desc: 'Premier contact au parking, point d\'arrêt, alignement, sortie de circuit.',
+    steps: [
+      { t: 'atis' },
+      {
+        t: 'pi', abbr: false, rb: ['cs', 'atis'], src: 'manuel',
+        sit: "Tu es au parking à {ad}, prêt à rouler, vol VFR vers {to} avec {pob}. Fais ton premier contact.",
+        fr: '{st}, {cs}, bonjour, {type} au parking, {pob}, VFR à destination de {to}, information {atis}, pour rouler.',
+        en: '{st}, {cs}, good morning, {type} at the parking, {pob}, VFR to {to}, information {atis}, request taxi.',
+      },
+      {
+        t: 'st',
+        fr: '{csA}, {st}, bonjour, piste {rwy} en service, QNH {qnh}, rappelez au point d\'arrêt piste {rwy}.',
+        en: '{csA}, {st}, good morning, runway in use {rwy}, QNH {qnh}, report holding point runway {rwy}.',
+      },
+      {
+        t: 'pi', abbr: true, rb: ['rwy', 'qnh'], src: 'manuel',
+        sit: "Collationne l'information reçue.",
+        fr: 'Piste {rwy}, QNH {qnh}, je rappelle au point d\'arrêt piste {rwy}, {csA}.',
+        en: 'Runway {rwy}, QNH {qnh}, wilco, {csA}.',
+      },
+      {
+        t: 'pi', abbr: true, rb: ['rwy'], src: 'usage',
+        sit: 'Essais moteur terminés, tu es au point d\'arrêt piste {rwy}.',
+        fr: '{st}, {csA}, au point d\'arrêt piste {rwy}, prêt au départ.',
+        en: '{st}, {csA}, holding point runway {rwy}, ready for departure.',
+      },
+      {
+        t: 'st',
+        fr: '{csA}, piste {rwy} libre, vent {wind}.',
+        en: '{csA}, runway {rwy} free, wind {wind}.',
+      },
+      {
+        t: 'pi', abbr: true, rb: ['rwy'], src: 'usage',
+        sit: "Annonce ton alignement et ton décollage (un AFIS ne délivre pas de clairance).",
+        fr: 'Je m\'aligne et je décolle piste {rwy}, {csA}.',
+        en: 'Lining up and taking off runway {rwy}, {csA}.',
+      },
+      {
+        t: 'st',
+        fr: '{csA}, rappelez quittant le circuit.',
+        en: '{csA}, report leaving the circuit.',
+      },
+      {
+        t: 'pi', abbr: true, rb: [], src: 'manuel',
+        sit: 'Accuse réception.',
+        fr: 'Je rappelle quittant le circuit, {csA}.',
+        en: 'Wilco, {csA}.',
+      },
+      {
+        t: 'pi', abbr: true, rb: [], src: 'manuel',
+        sit: 'Tu sors du circuit vers {to}.',
+        fr: '{st}, {csA}, sortie de circuit, je quitte la fréquence.',
+        en: '{st}, {csA}, leaving circuit and frequency.',
+      },
+      { t: 'st', fr: '{csA}, au revoir.', en: '{csA}, good day.' },
+    ],
+  },
+
+  {
+    id: 'afis-arr', group: 'AFIS', adKind: 'afis', allowHome: true,
+    title: 'Arrivée sur un aérodrome AFIS',
+    desc: 'Message d\'arrivée VFR, intégration, information de trafic, finale, piste dégagée.',
+    steps: [
+      { t: 'atis' },
+      {
+        t: 'pi', abbr: false, rb: [], src: 'manuel',
+        sit: 'Tu arrives de {from}, à {pos}, {alt}. Établis le contact.',
+        fr: '{st}, {cs}, bonjour.',
+        en: '{st}, {cs}, good morning.',
+      },
+      { t: 'st', fr: '{cs}, {st}, bonjour, j\'écoute.', en: '{cs}, {st}, good morning, pass your message.' },
+      {
+        t: 'pi', abbr: false, rb: ['cs', 'atis'], src: 'manuel',
+        sit: 'Transmets ton message d\'arrivée : estimé verticale terrain à {eta}.',
+        fr: '{cs}, {type}, VFR de {from} à {ad} pour atterrissage, {pos}, {alt}, estimé verticale terrain à {eta}, information {atis}.',
+        en: '{cs}, {type}, VFR from {from} to {ad} for landing, {pos}, {alt}, estimate overhead at {eta}, information {atis}.',
+      },
+      {
+        t: 'st',
+        fr: '{csA}, piste {rwy} en service, QNH {qnh}, un {traf} dans le circuit, rappelez vent arrière main {side} piste {rwy}.',
+        en: '{csA}, runway in use {rwy}, QNH {qnh}, one {traf} in the circuit, report {side} downwind runway {rwy}.',
+      },
+      {
+        t: 'pi', abbr: true, rb: ['rwy', 'qnh', 'side'], src: 'manuel',
+        sit: 'Collationne.',
+        fr: 'Piste {rwy}, QNH {qnh}, je rappelle vent arrière main {side} piste {rwy}, {csA}.',
+        en: 'Runway {rwy}, QNH {qnh}, wilco {side} downwind runway {rwy}, {csA}.',
+      },
+      {
+        t: 'pi', abbr: true, rb: ['rwy', 'side'], src: 'manuel',
+        sit: 'Tu es en vent arrière.',
+        fr: '{st}, {csA}, vent arrière main {side} piste {rwy}.',
+        en: '{st}, {csA}, {side} downwind runway {rwy}.',
+      },
+      {
+        t: 'st',
+        fr: '{csA}, trafic {traf} en base main {side}, rappelez finale piste {rwy}.',
+        en: '{csA}, traffic {traf} on {side} base, report final runway {rwy}.',
+      },
+      {
+        t: 'pi', abbr: true, rb: ['rwy'], src: 'manuel',
+        sit: 'Tu as le trafic en vue.',
+        fr: 'Trafic en vue, je rappelle finale piste {rwy}, {csA}.',
+        en: 'Traffic in sight, reporting final runway {rwy}, {csA}.',
+      },
+      {
+        t: 'pi', abbr: true, rb: ['rwy'], src: 'manuel',
+        sit: 'Le trafic a dégagé, tu es en finale.',
+        fr: '{st}, {csA}, finale piste {rwy}.',
+        en: '{st}, {csA}, final runway {rwy}.',
+      },
+      { t: 'st', fr: '{csA}, piste {rwy} libre, vent {wind}.', en: '{csA}, runway {rwy} free, wind {wind}.' },
+      {
+        t: 'pi', abbr: true, rb: ['rwy'], src: 'manuel',
+        sit: 'Annonce ton atterrissage.',
+        fr: 'J\'atterris piste {rwy}, {csA}.',
+        en: 'Landing runway {rwy}, {csA}.',
+      },
+      {
+        t: 'pi', abbr: true, rb: [], src: 'usage',
+        sit: 'Tu as dégagé la piste.',
+        fr: '{st}, {csA}, piste dégagée.',
+        en: '{st}, {csA}, runway vacated.',
+      },
+      { t: 'st', fr: '{csA}, roger.', en: '{csA}, roger.' },
+    ],
+  },
+
+  {
+    id: 'afis-circuit', group: 'AFIS', adKind: 'afis', allowHome: true,
+    title: 'Tours de piste en AFIS',
+    desc: 'Toucher, remise de gaz sur piste occupée, atterrissage complet.',
+    steps: [
+      { t: 'atis' },
+      {
+        t: 'pi', abbr: false, rb: ['cs', 'atis'], src: 'manuel',
+        sit: 'Au parking à {ad}, tu pars pour des tours de piste en local, seul à bord. Premier contact.',
+        fr: '{st}, {cs}, bonjour, {type} au parking, une personne à bord, pour des tours de piste, information {atis}, pour rouler.',
+        en: '{st}, {cs}, good morning, {type} at the parking, one person on board, for circuits, information {atis}, request taxi.',
+      },
+      {
+        t: 'st',
+        fr: '{csA}, {st}, bonjour, piste {rwy} en service, circuit main {side}, QNH {qnh}, rappelez prêt au départ.',
+        en: '{csA}, {st}, good morning, runway in use {rwy}, {side} circuit, QNH {qnh}, report ready for departure.',
+      },
+      {
+        t: 'pi', abbr: true, rb: ['rwy', 'qnh', 'side'], src: 'manuel',
+        sit: 'Collationne.',
+        fr: 'Piste {rwy}, circuit main {side}, QNH {qnh}, je rappelle prêt, {csA}.',
+        en: 'Runway {rwy}, {side} circuit, QNH {qnh}, wilco, {csA}.',
+      },
+      {
+        t: 'pi', abbr: true, rb: ['rwy', 'side'], src: 'manuel',
+        sit: 'Plus tard, tu es en vent arrière, tu prévois un toucher.',
+        fr: '{st}, {csA}, vent arrière main {side} piste {rwy}, pour un toucher.',
+        en: '{st}, {csA}, {side} downwind runway {rwy}, for touch and go.',
+      },
+      { t: 'st', fr: '{csA}, rappelez finale.', en: '{csA}, report final.' },
+      { t: 'pi', abbr: true, rb: [], src: 'manuel', sit: 'Accuse réception.', fr: 'Je rappelle finale, {csA}.', en: 'Wilco, {csA}.' },
+      {
+        t: 'pi', abbr: true, rb: ['rwy'], src: 'manuel',
+        sit: 'Tu es en finale.',
+        fr: '{st}, {csA}, finale piste {rwy} pour un toucher.',
+        en: '{st}, {csA}, final runway {rwy} for touch and go.',
+      },
+      {
+        t: 'st',
+        fr: '{csA}, attention, un {traf} vient de s\'aligner piste {rwy}.',
+        en: '{csA}, caution, {traf} just lined up runway {rwy}.',
+      },
+      {
+        t: 'pi', abbr: true, rb: [], src: 'manuel',
+        sit: 'La piste est occupée : tu remets les gaz.',
+        fr: 'Je remets les gaz, {csA}.',
+        en: 'Going around, {csA}.',
+      },
+      { t: 'st', fr: '{csA}, rappelez vent arrière.', en: '{csA}, report downwind.' },
+      { t: 'pi', abbr: true, rb: [], src: 'manuel', sit: 'Accuse réception.', fr: 'Je rappelle vent arrière, {csA}.', en: 'Wilco, {csA}.' },
+      {
+        t: 'pi', abbr: true, rb: ['rwy'], src: 'manuel',
+        sit: 'Nouveau circuit : tu es en finale, cette fois pour un atterrissage complet.',
+        fr: '{st}, {csA}, finale piste {rwy}, atterrissage complet.',
+        en: '{st}, {csA}, final runway {rwy}, full stop.',
+      },
+      { t: 'st', fr: '{csA}, piste {rwy} libre, vent {wind}.', en: '{csA}, runway {rwy} free, wind {wind}.' },
+      { t: 'pi', abbr: true, rb: ['rwy'], src: 'manuel', sit: 'Annonce ton atterrissage.', fr: 'J\'atterris piste {rwy}, {csA}.', en: 'Landing runway {rwy}, {csA}.' },
+    ],
+  },
+
+  {
+    id: 'afis-transit', group: 'AFIS', adKind: 'afis', allowHome: false,
+    title: 'Transit à la verticale d\'un terrain AFIS',
+    desc: 'Message de transit, information de trafic, sortie de fréquence.',
+    steps: [
+      { t: 'atis' },
+      {
+        t: 'pi', abbr: false, rb: ['cs', 'atis'], src: 'manuel',
+        sit: 'En navigation de {from} vers {to}, tu passes à la verticale de {ad}. Tu es à {pos}, {altT}. Annonce ton transit en un seul message (estimé verticale à {eta}).',
+        fr: '{st}, {cs}, bonjour, {type}, VFR de {from} à {to}, {pos}, {altT}, transit verticale terrain, estimé verticale à {eta}, information {atis}.',
+        en: '{st}, {cs}, good morning, {type}, VFR from {from} to {to}, {pos}, {altT}, transit overhead the aerodrome, estimate overhead at {eta}, information {atis}.',
+      },
+      {
+        t: 'st',
+        fr: '{csA}, {st}, bonjour, QNH {qnh}, piste {rwy} en service, un {traf} dans le circuit main {side}, rappelez verticale.',
+        en: '{csA}, {st}, good morning, QNH {qnh}, runway in use {rwy}, one {traf} in {side} circuit, report overhead.',
+      },
+      {
+        t: 'pi', abbr: true, rb: ['qnh'], src: 'manuel',
+        sit: 'Collationne.',
+        fr: 'QNH {qnh}, je rappelle verticale, {csA}.',
+        en: 'QNH {qnh}, wilco, {csA}.',
+      },
+      {
+        t: 'pi', abbr: true, rb: [], src: 'manuel',
+        sit: 'Tu es à la verticale du terrain, {altT}.',
+        fr: '{st}, {csA}, verticale terrain, {altT}.',
+        en: '{st}, {csA}, overhead the aerodrome, {altT}.',
+      },
+      { t: 'st', fr: '{csA}, rappelez quittant la fréquence.', en: '{csA}, report leaving frequency.' },
+      { t: 'pi', abbr: true, rb: [], src: 'manuel', sit: 'Accuse réception.', fr: 'Je rappelle quittant la fréquence, {csA}.', en: 'Wilco, {csA}.' },
+      {
+        t: 'pi', abbr: true, rb: [], src: 'manuel',
+        sit: 'Tu t\'éloignes vers {to}.',
+        fr: '{st}, {csA}, je quitte la fréquence.',
+        en: '{st}, {csA}, leaving frequency.',
+      },
+      { t: 'st', fr: '{csA}, au revoir.', en: '{csA}, good day.' },
+    ],
+  },
+
+  {
+    id: 'auto-arr', group: 'Auto-information', adKind: 'auto', allowHome: false,
+    title: 'Arrivée en auto-information',
+    desc: 'Pas de station au sol : annonces de position, trafic au sol, piste dégagée.',
+    note: "Phraséologie d'auto-information : pratique usuelle, hors manuel DSNA. En France, l'auto-information se fait en français sauf mention contraire sur la carte VAC.",
+    steps: [
+      {
+        t: 'pi', abbr: false, rb: [], src: 'usage',
+        sit: 'Pas d\'ATIS, pas d\'AFIS. Tu arrives à {pos}, {alt}. Le vent observé favorise la piste {rwy}, circuit main {side}. Fais ta première annonce.',
+        fr: '{st}, {cs}, {type}, {pos}, {alt}, pour intégration vent arrière main {side} piste {rwy}, {st}.',
+        en: '{st}, {cs}, {type}, {pos}, {alt}, joining {side} downwind runway {rwy}, {st}.',
+      },
+      {
+        t: 'other',
+        fr: '{ad}, F-GHBD, au point d\'attente piste {rwy}, je m\'aligne et décolle dans une minute, {ad}.',
+        en: '{ad} traffic, F-GHBD, holding point runway {rwy}, lining up and taking off in one minute, {ad} traffic.',
+      },
+      {
+        t: 'pi', abbr: false, rb: ['rwy', 'side'], src: 'usage',
+        sit: 'Tu entres en vent arrière.',
+        fr: '{st}, {cs}, vent arrière main {side} piste {rwy}, pour atterrissage complet, {st}.',
+        en: '{st}, {cs}, {side} downwind runway {rwy}, full stop, {st}.',
+      },
+      {
+        t: 'pi', abbr: false, rb: ['rwy'], src: 'usage',
+        sit: 'Tu es en finale.',
+        fr: '{st}, {cs}, finale piste {rwy}, {st}.',
+        en: '{st}, {cs}, final runway {rwy}, {st}.',
+      },
+      {
+        t: 'pi', abbr: false, rb: ['rwy'], src: 'usage',
+        sit: 'Tu as dégagé la piste.',
+        fr: '{st}, {cs}, piste {rwy} dégagée, {st}.',
+        en: '{st}, {cs}, runway {rwy} vacated, {st}.',
+      },
+    ],
+  },
+
+  {
+    id: 'panpan', group: 'Urgence', adKind: 'afis', allowHome: true,
+    title: 'Urgence : PAN PAN',
+    desc: 'Moteur irrégulier, déroutement vers un terrain AFIS.',
+    steps: [
+      {
+        t: 'pi', abbr: false, rb: ['cs'], src: 'manuel',
+        sit: 'En navigation, le moteur devient irrégulier et perd des tours. Tu es à {pos}, {alt}, cap {hdg}, {pob}. Tu décides de te dérouter sur {ad}. Émets un message d\'urgence sur la fréquence de {st}.',
+        fr: 'PAN PAN, PAN PAN, PAN PAN, {st}, {cs}, {type}, moteur irrégulier, je me déroute sur {ad} pour atterrissage, {pos}, {alt}, cap {hdg}, {pob}.',
+        en: 'PAN PAN, PAN PAN, PAN PAN, {st}, {cs}, {type}, rough running engine, diverting to {ad} for landing, {pos}, {alt}, heading {hdg}, {pob}.',
+      },
+      {
+        t: 'st',
+        fr: '{cs}, PAN PAN roger, piste {rwy} en service, vent {wind}, QNH {qnh}, rappelez finale.',
+        en: '{cs}, PAN PAN roger, runway in use {rwy}, wind {wind}, QNH {qnh}, report final.',
+      },
+      {
+        t: 'pi', abbr: false, rb: ['rwy', 'qnh'], src: 'manuel',
+        sit: 'Collationne (la station n\'a pas abrégé ton indicatif).',
+        fr: 'Piste {rwy}, QNH {qnh}, je rappelle finale, {cs}.',
+        en: 'Runway {rwy}, QNH {qnh}, wilco, {cs}.',
+      },
+      {
+        t: 'pi', abbr: false, rb: ['rwy'], src: 'manuel',
+        sit: 'Tu es en finale.',
+        fr: '{st}, {cs}, finale piste {rwy}.',
+        en: '{st}, {cs}, final runway {rwy}.',
+      },
+      { t: 'st', fr: '{cs}, piste {rwy} libre, vent {wind}.', en: '{cs}, runway {rwy} free, wind {wind}.' },
+      { t: 'pi', abbr: false, rb: ['rwy'], src: 'manuel', sit: 'Annonce ton atterrissage.', fr: 'J\'atterris piste {rwy}, {cs}.', en: 'Landing runway {rwy}, {cs}.' },
+    ],
+  },
+
+  {
+    id: 'mayday', group: 'Urgence', adKind: 'afis', allowHome: true,
+    title: 'Détresse : MAYDAY',
+    desc: 'Panne moteur en campagne, message de détresse complet.',
+    steps: [
+      {
+        t: 'pi', abbr: false, rb: ['cs'], src: 'manuel',
+        sit: 'Panne moteur totale, redémarrage impossible. Tu es à {pos}, {alt}, cap {hdg}, {pob}. Tu vas te poser en campagne. Émets un message de détresse à {st}.',
+        fr: 'MAYDAY, MAYDAY, MAYDAY, {st}, {cs}, {type}, panne moteur, atterrissage forcé en campagne, {pos}, {alt}, cap {hdg}, {pob}.',
+        en: 'MAYDAY, MAYDAY, MAYDAY, {st}, {cs}, {type}, engine failure, forced landing in a field, {pos}, {alt}, heading {hdg}, {pob}.',
+      },
+      {
+        t: 'st',
+        fr: '{cs}, MAYDAY roger, QNH {qnh}, rappelez au sol si possible.',
+        en: '{cs}, MAYDAY roger, QNH {qnh}, report on ground if able.',
+      },
+      {
+        t: 'pi', abbr: false, rb: ['qnh'], src: 'manuel',
+        sit: 'Collationne brièvement, tu es très occupé.',
+        fr: 'QNH {qnh}, {cs}.',
+        en: 'QNH {qnh}, {cs}.',
+      },
+      {
+        t: 'pi', abbr: false, rb: [], src: 'usage',
+        sit: 'Tu es posé dans un champ, sans blessé. Préviens la station.',
+        fr: '{st}, {cs}, posé en campagne, personne n\'est blessé.',
+        en: '{st}, {cs}, on ground in a field, no injuries.',
+      },
+    ],
+  },
+
+  {
+    id: 'twr-arr', group: 'Aérodrome contrôlé', adKind: 'twr', allowHome: false,
+    title: 'Arrivée sur un aérodrome contrôlé',
+    desc: 'Clairance d\'intégration, collationnement, clairance d\'atterrissage.',
+    steps: [
+      { t: 'atis' },
+      {
+        t: 'pi', abbr: false, rb: [], src: 'manuel',
+        sit: 'Tu arrives de {from}, à {pos}, {alt}. Établis le contact.',
+        fr: '{st}, {cs}, bonjour.',
+        en: '{st}, {cs}, good morning.',
+      },
+      { t: 'st', fr: '{cs}, {st}, bonjour, j\'écoute.', en: '{cs}, {st}, good morning, pass your message.' },
+      {
+        t: 'pi', abbr: false, rb: ['cs', 'atis'], src: 'manuel',
+        sit: 'Transmets ton message (estimé verticale à {eta}).',
+        fr: '{cs}, {type}, VFR de {from} à {ad} pour atterrissage, {pos}, {alt}, estimé verticale terrain à {eta}, information {atis}.',
+        en: '{cs}, {type}, VFR from {from} to {ad} for landing, {pos}, {alt}, estimate overhead at {eta}, information {atis}.',
+      },
+      {
+        t: 'st',
+        fr: '{csA}, entrez vent arrière main {side} piste {rwy}, QNH {qnh}, rappelez vent arrière.',
+        en: '{csA}, join {side} downwind runway {rwy}, QNH {qnh}, report downwind.',
+      },
+      {
+        t: 'pi', abbr: true, rb: ['rwy', 'qnh', 'side'], src: 'manuel',
+        sit: 'Collationne la clairance.',
+        fr: 'J\'entre vent arrière main {side} piste {rwy}, QNH {qnh}, je rappelle vent arrière, {csA}.',
+        en: 'Joining {side} downwind runway {rwy}, QNH {qnh}, reporting downwind, {csA}.',
+      },
+      {
+        t: 'pi', abbr: true, rb: ['rwy', 'side'], src: 'manuel',
+        sit: 'Tu es en vent arrière.',
+        fr: '{st}, {csA}, vent arrière main {side} piste {rwy}.',
+        en: '{st}, {csA}, {side} downwind runway {rwy}.',
+      },
+      {
+        t: 'st',
+        fr: '{csA}, numéro 2, trafic précédant un {traf} en base, rappelez finale piste {rwy}.',
+        en: '{csA}, number 2, preceding traffic {traf} on base, report final runway {rwy}.',
+      },
+      {
+        t: 'pi', abbr: true, rb: ['rwy'], src: 'manuel',
+        sit: 'Tu as le trafic en vue.',
+        fr: 'Numéro 2, trafic en vue, je rappelle finale piste {rwy}, {csA}.',
+        en: 'Number 2, traffic in sight, reporting final runway {rwy}, {csA}.',
+      },
+      { t: 'pi', abbr: true, rb: ['rwy'], src: 'manuel', sit: 'Tu es en finale.', fr: '{st}, {csA}, finale piste {rwy}.', en: '{st}, {csA}, final runway {rwy}.' },
+      {
+        t: 'st',
+        fr: '{csA}, vent {wind}, piste {rwy}, autorisé atterrissage.',
+        en: '{csA}, wind {wind}, runway {rwy}, cleared to land.',
+      },
+      {
+        t: 'pi', abbr: true, rb: ['rwy'], src: 'manuel',
+        sit: 'Collationne la clairance d\'atterrissage.',
+        fr: 'J\'atterris piste {rwy}, {csA}.',
+        en: 'Landing runway {rwy}, {csA}.',
+      },
+    ],
+  },
+];
+
+// Éléments de contenu attendus par la correction locale, transmission pilote par transmission pilote
+const NEEDS = {
+  'afis-dep': [['type', 'pob', 'vfr', 'to', 'taxi'], ['report'], ['holding', 'ready'], ['lineup', 'takeoff'], ['report'], ['leaving']],
+  'afis-arr': [[], ['type', 'vfr', 'from', 'landing', 'pos', 'alt', 'eta'], ['report'], ['downwind'], ['insight', 'report'], ['final'], ['landing'], ['vacated']],
+  'afis-circuit': [['type', 'circuits', 'taxi'], ['report'], ['downwind', 'touch'], ['report'], ['final', 'touch'], ['goaround'], ['report'], ['final', 'landing'], ['landing']],
+  'afis-transit': [['type', 'vfr', 'from', 'to', 'pos', 'alt', 'transit', 'eta'], ['report'], ['overhead', 'alt'], ['report'], ['leaving']],
+  'auto-arr': [['type', 'pos', 'alt', 'downwind'], ['downwind', 'landing'], ['final'], ['vacated']],
+  panpan: [['type', 'nature', 'intent', 'pos', 'alt', 'hdg', 'pob'], ['report'], ['final'], ['landing']],
+  mayday: [['type', 'nature', 'intent', 'pos', 'alt', 'hdg', 'pob'], [], ['ground', 'injuries']],
+  'twr-arr': [[], ['type', 'vfr', 'from', 'landing', 'pos', 'alt', 'eta'], ['downwind', 'report'], ['downwind'], ['number', 'insight'], ['final'], ['landing']],
+};
+const URGENCY = { panpan: 'panpan', mayday: 'mayday' };
+
+for (const scn of SCENARIOS) {
+  const pilotSteps = scn.steps.filter((st) => st.t === 'pi');
+  (NEEDS[scn.id] || []).forEach((need, i) => { if (pilotSteps[i]) pilotSteps[i].need = need; });
+  if (URGENCY[scn.id] && pilotSteps[0]) pilotSteps[0].urg = URGENCY[scn.id];
+}
+
+// ===== storage.js =====
+// Réglages et historique, stockés localement sur l'appareil (localStorage).
+
+const SETTINGS_KEY = 'phraseo.settings.v1';
+const HISTORY_KEY = 'phraseo.history.v1';
+
+const DEFAULTS = {
+  engine: 'auto', // 'auto' : Claude si disponible (artefact claude.ai), sinon règles locales
+  aircraft: [{ reg: '', type: 'DR400' }, { reg: '', type: 'DR400' }],
+  homeAd: '',
+  lang: 'fr',
+  mode: 'debutant',
+  rate: 1.05,
+  voiceFr: '',
+  voiceEn: '',
+};
+
+function read(key, fallback) {
+  try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : fallback; } catch { return fallback; }
+}
+function write(key, val) {
+  try { localStorage.setItem(key, JSON.stringify(val)); return true; } catch { return false; }
+}
+
+function loadSettings() {
+  const { apiKey, model, usage, ...s } = read(SETTINGS_KEY, {}); // anciens champs API supprimés
+  return { ...DEFAULTS, ...s };
+}
+function saveSettings(s) { write(SETTINGS_KEY, s); }
+
+function loadHistory() { return read(HISTORY_KEY, []); }
+function addSession(session) {
+  const h = loadHistory();
+  h.unshift(session);
+  write(HISTORY_KEY, h.slice(0, 200));
+}
+function clearHistory() { write(HISTORY_KEY, []); }
+
+// ===== speech.js =====
+// Reconnaissance vocale (Web Speech API, gérée par Safari iOS) et synthèse vocale.
+
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const sttSupported = !!SR;
+const ttsSupported = 'speechSynthesis' in window;
+
+const LANG_CODES = { fr: 'fr-FR', en: 'en-GB' };
+
+// ── Reconnaissance ────────────────────────────────────────────────
+let rec = null;
+let finalText = '';
+
+function startListening(lang, { onText, onEnd, onError }) {
+  if (!SR) { onError?.('unsupported'); return; }
+  stopSpeaking();
+  rec = new SR();
+  rec.lang = LANG_CODES[lang];
+  rec.continuous = true;
+  rec.interimResults = true;
+  rec.maxAlternatives = 1;
+  finalText = '';
+  rec.onresult = (e) => {
+    let interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const r = e.results[i];
+      if (r.isFinal) finalText += r[0].transcript + ' ';
+      else interim += r[0].transcript;
+    }
+    onText?.((finalText + interim).replace(/\s+/g, ' ').trim());
+  };
+  rec.onerror = (e) => onError?.(e.error);
+  rec.onend = () => { onEnd?.(finalText.trim()); rec = null; };
+  try { rec.start(); } catch (err) { onError?.(String(err)); }
+}
+
+function stopListening() {
+  if (rec) { try { rec.stop(); } catch (_) { /* déjà arrêté */ } }
+}
+
+// ── Synthèse ──────────────────────────────────────────────────────
+let voicesCache = [];
+function loadVoices() { voicesCache = ttsSupported ? speechSynthesis.getVoices() : []; }
+if (ttsSupported) { loadVoices(); speechSynthesis.onvoiceschanged = loadVoices; }
+
+function voicesFor(lang) {
+  if (!voicesCache.length) loadVoices();
+  const prefix = lang === 'fr' ? 'fr' : 'en';
+  return voicesCache.filter((v) => v.lang.toLowerCase().startsWith(prefix));
+}
+
+function chooseVoice(lang, wanted) {
+  const list = voicesFor(lang);
+  if (wanted) { const w = list.find((v) => v.voiceURI === wanted); if (w) return w; }
+  const code = LANG_CODES[lang].toLowerCase();
+  return list.find((v) => v.lang.toLowerCase().replace('_', '-') === code) || list[0] || null;
+}
+
+// iOS n'autorise la synthèse qu'après un geste utilisateur : on « débloque » au premier tap.
+let unlocked = false;
+function unlockAudio() {
+  if (unlocked) return;
+  unlocked = true;
+  if (ttsSupported) { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); }
+  getAudioCtx();
+}
+
+function speak(text, lang, opts = {}) {
+  return new Promise((resolve) => {
+    if (!ttsSupported || opts.muted) { resolve(); return; }
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = LANG_CODES[lang];
+    const voice = chooseVoice(lang, opts.voice);
+    if (voice) u.voice = voice;
+    u.rate = opts.rate || 1;
+    u.pitch = opts.pitch || 1;
+    let done = false;
+    const finish = () => { if (!done) { done = true; resolve(); } };
+    u.onend = finish;
+    u.onerror = finish;
+    speechSynthesis.speak(u);
+    // Garde-fou : certains navigateurs ne déclenchent pas onend
+    setTimeout(finish, Math.max(4000, text.length * 120));
+  });
+}
+
+function stopSpeaking() { if (ttsSupported) speechSynthesis.cancel(); }
+
+// ── Bruit de squelch (alternat) ───────────────────────────────────
+let audioCtx = null;
+function getAudioCtx() {
+  if (!audioCtx) {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (AC) audioCtx = new AC();
+  }
+  if (audioCtx?.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+
+function squelch(duration = 0.12, volume = 0.08) {
+  const ctx = getAudioCtx();
+  if (!ctx) return Promise.resolve();
+  const len = Math.floor(ctx.sampleRate * duration);
+  const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / len);
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  const filter = ctx.createBiquadFilter();
+  filter.type = 'bandpass'; filter.frequency.value = 1800; filter.Q.value = 0.8;
+  const gain = ctx.createGain();
+  gain.gain.value = volume;
+  src.connect(filter).connect(gain).connect(ctx.destination);
+  src.start();
+  return new Promise((r) => setTimeout(r, duration * 1000 + 60));
+}
+
+// ===== evaluator.js =====
+// Évaluation des transmissions, sans aucun coût d'API :
+//  - ouverte dans claude.ai (artefact publié) : correction par Claude, décomptée de l'utilisation
+//    Claude de la personne qui utilise la page (capacité « sample ») ;
+//  - partout ailleurs (GitHub Pages, hors ligne) : moteur de règles local.
+
+
+
+// ── Détection du moteur Claude ────────────────────────────────────
+let samplePromise = null;
+let sampleBlocked = false; // refus de consentement ou indisponibilité pendant cette visite
+
+function getSample() {
+  if (sampleBlocked) return Promise.resolve(null);
+  if (!samplePromise) {
+    samplePromise = window.claude?.use
+      ? window.claude.use('sample').catch(() => null)
+      : Promise.resolve(null);
+  }
+  return samplePromise;
+}
+
+async function engineName(settings) {
+  if (settings.engine === 'local') return 'local';
+  return (await getSample()) ? 'claude' : 'local';
+}
+
+const BLOCKING = ['not_granted', 'sampling_disabled', 'not_declared', 'capability_disabled', 'capability_removed', 'session_expired'];
+const ERROR_COPY = {
+  not_granted: 'Correction par Claude refusée pour cette visite.',
+  rate_limited: 'Trop de demandes en même temps.',
+  session_expired: 'Session claude.ai expirée, recharge la page.',
+  invalid_json: 'Réponse de Claude illisible.',
+  upstream_error: 'Claude est momentanément indisponible.',
+};
+
+async function askClaude(prompt, tier) {
+  const sample = await getSample();
+  if (!sample) throw Object.assign(new Error('Claude indisponible'), { code: 'unavailable' });
+  try {
+    return await sample.json(prompt, { modelTier: tier });
+  } catch (e) {
+    if (BLOCKING.includes(e?.code)) sampleBlocked = true;
+    throw Object.assign(new Error(ERROR_COPY[e?.code] || 'Correction par Claude impossible.'), { code: e?.code });
+  }
+}
+
+// ── Consignes données à Claude ────────────────────────────────────
+const RULES = `RÉFÉRENCE : Manuel de phraséologie à l'usage de la circulation aérienne générale, DSNA, 10e édition (15 avril 2023), conforme SERA. Règles principales :
+1. Premier appel : indicatif COMPLET. L'indicatif abrégé (premier caractère + deux derniers, ex. F-GKAJ → F-AJ) n'est utilisable qu'après que la station l'a employé elle-même.
+2. Collationnement : le pilote répète piste, QNH, fréquence, code transpondeur, cap, niveau/altitude, conditions des clairances conditionnelles, instructions de circuit, et termine par son indicatif. « Roger » ne remplace JAMAIS un collationnement ni une réponse affirme/négatif.
+3. Le pilote collationne les clairances de décollage et d'atterrissage par « je décolle »/« taking off » et « j'atterris »/« landing ». « Autorisé » est réservé au contrôleur.
+4. AFIS : l'agent AFIS ne délivre AUCUNE clairance. Le pilote annonce ses intentions (« je m'aligne et je décolle », « j'atterris »), ne demande pas d'autorisation ; l'AFIS informe (« piste libre », trafic, vent, QNH).
+5. Expressions conventionnelles (SERA.14045) : affirme/affirm, négatif/negative, répétez/say again, wilco, roger, standby, correction, je répète/I say again, rappelez/report. « Over » et « out » ne s'emploient normalement pas en VHF. Pas de « oui », « non », « OK », « pardon ».
+6. La piste est toujours désignée par « piste »/« runway » suivi de son identification. Fréquences avec « décimale »/« decimal ».
+7. Au premier contact, annoncer l'information ATIS reçue.
+8. Message d'arrivée/transit VFR : indicatif, type, VFR de… à…, intention, position, altitude, estimée, information ATIS.
+9. Détresse : « MAYDAY » x3, organisme, indicatif, nature, intentions, position, niveau, cap. Urgence : « PAN PAN » x3, même structure.
+10. Messages brefs ; langage clair seulement si la phraséologie normalisée ne convient pas.
+11. En anglais : nombres chiffre par chiffre pour piste, cap, vent, QNH (sauf milliers ronds), transpondeur.
+12. Auto-information (pratique usuelle, hors manuel) : nom du terrain en début ET en fin de message, indicatif complet, position, intentions.
+13. Circuit : vent arrière, base, finale, « main gauche/droite », « pour un toucher », « atterrissage complet », « je remets les gaz »/« going around ».
+TOLÉRANCE : le texte vient d'une reconnaissance vocale. Ignore ponctuation, majuscules, chiffres en lettres ou en chiffres, « juliette »/« juliett », « m'aider » pour « mayday », homophones évidents. En cas de doute, sévérité « conseil » avec la mention « possiblement dû à la reconnaissance vocale ».
+VARIANTES : la réponse modèle est indicative ; une formulation différente mais conforme est correcte. N'invente pas de règle ; une remarque qui relève de l'usage plutôt que du manuel porte la source « usage ».`;
+
+const STEP_SCHEMA = `{"note": <entier 0-10>, "verdict": "correct"|"acceptable"|"incorrect",
+ "collationnement": [{"element": "QNH", "attendu": "1018", "entendu": "1018 ou absent", "ok": true}],
+ "erreurs": [{"severite": "majeure"|"mineure"|"conseil", "categorie": "collationnement"|"indicatif"|"terminologie"|"omission"|"ordre"|"superflu"|"nombres"|"autre", "entendu": "<extrait>", "correction": "<formulation correcte>", "explication": "<1 phrase>", "source": "manuel"|"usage"}],
+ "version_corrigee": "<transmission complète correcte, dans la langue de l'exercice>",
+ "commentaire": "<1 à 2 phrases, en français>"}`;
+
+const INTRO = `Tu es instructeur radiotéléphonie VFR pour l'examen PPL en France (normes DGAC/DSNA). Tu évalues les transmissions d'un élève pilote.
+Barème : majeure = collationnement faux ou absent, indicatif faux, terme dangereux ou contraire au type de service ; mineure = ordre, formulation non standard, mot superflu ; conseil = amélioration facultative. Explications en français, concises.`;
+
+function serviceLabel(kind) {
+  return { afis: 'AFIS (information de vol, pas de clairance)', twr: 'Tour de contrôle (clairances ATC)', auto: 'Auto-information (aucune station au sol)' }[kind];
+}
+
+function describeStep(ex) {
+  return {
+    service: serviceLabel(ex.kind),
+    langue: ex.lang === 'fr' ? 'français' : 'anglais',
+    message_station_precedent: ex.prevStation || '(aucun)',
+    situation: ex.situation,
+    indicatif_complet: ex.cs,
+    indicatif_abrege: ex.csA,
+    indicatif_abrege_autorise: ex.abbr,
+    elements_obligatoires: ex.rb.map((k) => ({ element: RB_LABELS[k], valeur: k === 'atis' ? `${ex.rbValues[k]} (${PHON[ex.rbValues[k]]})` : ex.rbValues[k] })),
+    reponse_modele: ex.model,
+    origine_modele: ex.src === 'usage' ? 'pratique usuelle hors manuel' : 'manuel DSNA',
+    transmission_eleve: ex.transcript,
+  };
+}
+
+// Évalue une transmission. Repli automatique sur les règles locales.
+async function evaluateStep(settings, ex) {
+  if ((await engineName(settings)) === 'claude') {
+    try {
+      const prompt = `${INTRO}\n${RULES}\n\nÉvalue cette transmission :\n${JSON.stringify(describeStep(ex), null, 1)}\n\nRéponds uniquement par un objet JSON de cette forme :\n${STEP_SCHEMA}`;
+      const ev = await askClaude(prompt, 'quick');
+      if (ev && typeof ev === 'object' && 'verdict' in ev) return { ...ev, engine: 'claude' };
+      throw new Error('Réponse de Claude incomplète.');
+    } catch (e) {
+      const ev = localCheck(ex);
+      ev.commentaire = `${e.message} Correction locale utilisée. ${ev.commentaire}`;
+      return ev;
+    }
+  }
+  return localCheck(ex);
+}
+
+// Débrief du mode expérimenté : un seul appel pour tout le scénario
+async function evaluateSession(settings, exchanges, meta) {
+  if ((await engineName(settings)) === 'claude' && exchanges.length) {
+    try {
+      const prompt = `${INTRO}\n${RULES}\n\nDébrief d'un scénario complet « ${meta.title} » (${meta.ad}, ${meta.lang === 'fr' ? 'français' : 'anglais'}). Évalue chaque transmission puis fais une synthèse. Transmissions :\n${JSON.stringify(exchanges.map(describeStep), null, 1)}\n\nRéponds uniquement par un objet JSON :\n{"note_globale": <0-10>, "synthese": "<3 phrases max>", "points_forts": ["..."], "axes_de_progres": ["..."], "etapes": [<un objet par transmission, dans l'ordre, au format ${STEP_SCHEMA}>]}`;
+      const d = await askClaude(prompt, 'default');
+      if (d && Array.isArray(d.etapes)) {
+        d.etapes = d.etapes.map((e) => ({ ...e, engine: 'claude' }));
+        return d;
+      }
+      throw new Error('Réponse de Claude incomplète.');
+    } catch (e) {
+      return localDebrief(exchanges, `${e.message} Correction locale utilisée.`);
+    }
+  }
+  return localDebrief(exchanges);
+}
+
+function localDebrief(exchanges, note) {
+  const etapes = exchanges.map(localCheck);
+  const avg = etapes.length ? Math.round(etapes.reduce((t, e) => t + e.note, 0) / etapes.length * 10) / 10 : null;
+  const cats = {};
+  etapes.forEach((e) => e.erreurs.forEach((x) => { if (x.severite !== 'conseil') cats[x.categorie] = (cats[x.categorie] || 0) + 1; }));
+  const top = Object.entries(cats).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([c, n]) => `${c} (${n})`);
+  return {
+    local: true,
+    note_globale: avg,
+    synthese: `${note ? `${note} ` : ''}${top.length ? `Points à travailler : ${top.join(', ')}.` : 'Aucune erreur détectée par les règles locales.'}`,
+    points_forts: [], axes_de_progres: [], etapes,
+  };
+}
+
+// ── Moteur de règles local ────────────────────────────────────────
+const LETTER_RX = {
+  A: 'alfa|alpha', B: 'bravo', C: 'charlie', D: 'delta', E: 'echo', F: 'fox', G: 'golf', H: 'hotel', I: 'india',
+  J: 'juliet', K: 'kilo', L: 'lima', M: 'mike|maik', N: 'november|novembre', O: 'oscar', P: 'papa', Q: 'quebec|kebec',
+  R: 'romeo', S: 'sierra', T: 'tango', U: 'uniform', V: 'victor', W: 'whisk', X: 'x ?ray|xray|ix ?re', Y: 'yankee|yanki', Z: 'zulu|zoulou',
+};
+const WORD_DIGITS = {
+  zero: 0, un: 1, une: 1, one: 1, deux: 2, two: 2, trois: 3, three: 3, tree: 3, quatre: 4, four: 4,
+  cinq: 5, five: 5, fife: 5, six: 6, sept: 7, seven: 7, huit: 8, eight: 8, neuf: 9, nine: 9, niner: 9,
+};
+
+const strip = (s) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+function normalize(t) {
+  let s = ` ${strip(t.toLowerCase())} `.replace(/[.,;:!?'’"«»()-]/g, ' ');
+  s = s.replace(/\b[a-z]+\b/g, (w) => (w in WORD_DIGITS ? String(WORD_DIGITS[w]) : w));
+  s = s.replace(/(\d)\s+(?=\d)/g, '$1');
+  return s.replace(/\s+/g, ' ');
+}
+
+// Positions (index de mot) des lettres phonétiques reconnues, dans l'ordre du texte
+function letterHits(norm) {
+  const words = norm.trim().split(' ');
+  const hits = [];
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i] + (words[i + 1] ? ` ${words[i + 1]}` : '');
+    for (const [L, rx] of Object.entries(LETTER_RX)) {
+      if (new RegExp(`^(${rx})`).test(w)) { hits.push({ L, i }); break; }
+    }
+  }
+  return { hits, count: words.length };
+}
+
+// Cherche une suite de lettres (sous-séquence ordonnée et compacte) ; renvoie l'index du dernier mot ou -1
+function findSeq(hits, letters) {
+  for (let s = 0; s < hits.length; s++) {
+    if (hits[s].L !== letters[0]) continue;
+    let k = 1, last = hits[s].i, j = s + 1;
+    while (k < letters.length && j < hits.length) {
+      if (hits[j].i - last > 2) break;
+      if (hits[j].L === letters[k]) { k++; last = hits[j].i; }
+      j++;
+    }
+    if (k === letters.length) return last;
+  }
+  return -1;
+}
+function findSeqLast(hits, letters) {
+  let res = -1;
+  for (let s = 0; s < hits.length; s++) {
+    const r = findSeq(hits.slice(s), letters);
+    if (r > res) res = r;
+  }
+  return res;
+}
+
+const has = (norm, rx) => new RegExp(rx).test(norm);
+
+// Éléments attendus par étape (champ « need » des scénarios)
+const NEED = {
+  type: { label: "Type d'avion", test: (n, ex) => has(n, strip(ex.acType || 'dr400').toLowerCase().replace(/[^a-z0-9]/g, '').split('').join(' ?')) || has(n, '(robin|cessna|piper|tecnam|aquila|dr ?4|pa ?28|c ?1[57]2)') },
+  vfr: { label: 'VFR', test: (n) => has(n, 'v ?f ?r') },
+  pos: { label: 'Position', test: (n) => has(n, '\\b(nm|nautique|mile|nord|sud|est|ouest|north|south|east|west)') },
+  alt: { label: 'Altitude', test: (n) => has(n, '(pied|feet|ft)\\b') },
+  eta: { label: 'Heure estimée', test: (n) => has(n, 'estim') },
+  hdg: { label: 'Cap', test: (n) => has(n, '\\b(cap|heading)\\b') },
+  pob: { label: 'Personnes à bord', test: (n) => has(n, '(personne|a bord|persons|on board|pob)') },
+  from: { label: 'Provenance', test: (n, ex) => has(n, strip(ex.fromName).toLowerCase().split(' ')[0]) },
+  to: { label: 'Destination', test: (n, ex) => has(n, strip(ex.toName).toLowerCase().split(' ')[0]) },
+  landing: { label: 'Atterrissage', test: (n) => has(n, '(atterri|landing|full stop|atterrissage complet)') },
+  takeoff: { label: 'Décollage', test: (n) => has(n, '(decoll|taking off|take off)') },
+  lineup: { label: 'Alignement', test: (n) => has(n, '(align|lining up|line up)') },
+  taxi: { label: 'Demande de roulage', test: (n) => has(n, '(roul|taxi)') },
+  goaround: { label: 'Remise de gaz', test: (n) => has(n, '(remet|remise|going around|go around)') },
+  touch: { label: 'Toucher', test: (n) => has(n, '(toucher|touch)') },
+  downwind: { label: 'Vent arrière', test: (n) => has(n, '(vent arriere|downwind)') },
+  final: { label: 'Finale', test: (n) => has(n, 'final') },
+  vacated: { label: 'Piste dégagée', test: (n) => has(n, '(degag|vacat)') },
+  leaving: { label: 'Quitte la fréquence / le circuit', test: (n) => has(n, '(quitt|leaving)') },
+  ready: { label: 'Prêt au départ', test: (n) => has(n, '(pret|ready)') },
+  holding: { label: "Point d'arrêt", test: (n) => has(n, '(point d ?arret|holding)') },
+  overhead: { label: 'Verticale', test: (n) => has(n, '(verticale|overhead)') },
+  transit: { label: 'Transit', test: (n) => has(n, 'transit') },
+  insight: { label: 'Trafic en vue', test: (n) => has(n, '(en vue|in sight)') },
+  number: { label: 'Numéro dans la séquence', test: (n) => has(n, '(numero|number) ?2') },
+  report: { label: 'Accusé de réception (je rappelle / wilco)', test: (n) => has(n, '(rappel|wilco|report)') },
+  circuits: { label: 'Tours de piste', test: (n) => has(n, '(tours? de piste|circuit)') },
+  nature: { label: 'Nature du problème', test: (n) => has(n, '(moteur|engine|panne|failure|rough)') },
+  intent: { label: 'Intentions', test: (n) => has(n, '(deroute|divert|atterri|landing|campagne|field|force)') },
+  ground: { label: 'Posé', test: (n) => has(n, '(pose|on ground|au sol|landed)') },
+  injuries: { label: 'Blessés', test: (n) => has(n, '(bless|injur)') },
+};
+
+const TERMS = [
+  { rx: '\\b(ok|okay|d accord|dac)\\b', sev: 'mineure', cat: 'terminologie', said: 'OK / d\'accord', fr: 'roger / wilco', en: 'roger / wilco', why: '« OK » n\'est pas une expression conventionnelle (SERA.14045).' },
+  { rx: '^ ?(oui|yes|yeah)\\b|\\b(oui|yes)\\b', sev: 'mineure', cat: 'terminologie', said: 'oui / yes', fr: 'affirme', en: 'affirm', why: 'Répondre « affirme » / « affirm », pas « oui ».' },
+  { rx: '^ ?(non|no)\\b', sev: 'mineure', cat: 'terminologie', said: 'non / no', fr: 'négatif', en: 'negative', why: 'Répondre « négatif » / « negative », pas « non ».' },
+  { rx: '\\b(pardon|quoi|what)\\b', sev: 'mineure', cat: 'terminologie', said: 'pardon', fr: 'répétez', en: 'say again', why: 'Pour faire répéter : « répétez » / « say again ».' },
+  { rx: '\\b(over|out|termine)\\s*$', sev: 'mineure', cat: 'superflu', said: 'over / out', fr: '(rien)', en: '(nothing)', why: '« Over » et « out » ne s\'emploient normalement pas en VHF.' },
+  { rx: '\\b(merci|thank you|thanks)\\b', sev: 'conseil', cat: 'superflu', said: 'merci', fr: '(à supprimer)', en: '(remove)', why: 'Formule de politesse superflue en dehors du premier et du dernier contact.' },
+  { rx: '\\b(euh|heu|hum|uh|um)\\b', sev: 'conseil', cat: 'superflu', said: 'euh', fr: '(à supprimer)', en: '(remove)', why: 'Prépare ton message avant d\'appuyer sur l\'alternat.' },
+];
+
+function localCheck(ex) {
+  const norm = normalize(ex.transcript);
+  const { hits, count } = letterHits(norm);
+  const erreurs = [];
+  const coll = [];
+  const add = (severite, categorie, entendu, correction, explication, source = 'manuel') =>
+    erreurs.push({ severite, categorie, entendu, correction, explication, source });
+
+  // 1. Indicatif
+  const full = ex.cs.replace(/[^A-Z0-9]/gi, '').toUpperCase().split('');
+  const abbrL = [full[0], ...full.slice(-2)];
+  const fullEnd = findSeqLast(hits, full);
+  const abbrEnd = findSeqLast(hits, abbrL);
+  const csEnd = Math.max(fullEnd, abbrEnd);
+  const csSpoken = full.map((l) => PHON[l]).join(' ');
+  const abbrSpoken = abbrL.map((l) => PHON[l]).join(' ');
+  if (csEnd < 0) {
+    add('majeure', 'indicatif', '—', ex.abbr ? `${ex.csA} (${abbrSpoken})` : `${ex.cs} (${csSpoken})`,
+      'Indicatif absent ou erroné : il doit figurer dans chaque transmission, en alphabet phonétique.');
+  } else if (!ex.abbr && fullEnd < 0) {
+    add('majeure', 'indicatif', ex.csA, `${ex.cs} (${csSpoken})`,
+      'Indicatif complet obligatoire tant que la station ne l\'a pas abrégé elle-même.');
+  }
+  if (ex.rb.includes('cs')) coll.push({ element: RB_LABELS.cs, attendu: ex.cs, entendu: fullEnd >= 0 ? ex.cs : (abbrEnd >= 0 ? ex.csA : 'absent'), ok: fullEnd >= 0 });
+  // Indicatif en fin de collationnement
+  const endsWithCs = /\{csA?\}\.?\s*$/.test(ex.modelTpl || '') || ex.model.trim().replace(/\.$/, '').endsWith(ex.abbr ? ex.csA : ex.cs);
+  const isReadback = ex.rb.some((k) => ['qnh', 'rwy', 'side', 'freq'].includes(k));
+  if (csEnd >= 0 && endsWithCs && count - 1 - csEnd > 2) {
+    add(isReadback ? 'mineure' : 'conseil', 'ordre', '…', 'indicatif en fin de message', 'Dans un collationnement ou une réponse, l\'indicatif se place à la fin.');
+  }
+
+  // 2. Nom de la station en début de message (appel)
+  if (ex.stationFirst && ex.stationName) {
+    const st = strip(ex.stationName.toLowerCase()).split(' ')[0];
+    const firstWords = norm.trim().split(' ').slice(0, 3).join(' ');
+    if (!firstWords.includes(st)) {
+      const wrong = norm.match(/^\s*(?:mayday \S+ \S+ |pan pan pan pan pan pan )?([a-z]+(?: [a-z]+)?) (information|info|tour|tower|traffic)\b/);
+      if (wrong) add('majeure', 'autre', `${wrong[1]} ${wrong[2]}`, ex.stationName, 'Mauvaise station appelée : vérifie le nom de l\'organisme avant d\'émettre.');
+      else add('mineure', 'ordre', '—', ex.stationName, 'Un appel commence par le nom de la station appelée.');
+    }
+  }
+  if (ex.kind === 'auto' && ex.stationName) {
+    const st = strip(ex.stationName.toLowerCase()).split(' ')[0];
+    const lastWords = norm.trim().split(' ').slice(-3).join(' ');
+    if (!lastWords.includes(st)) add('mineure', 'ordre', '—', `… ${ex.stationName}`, 'En auto-information, le message se termine par le nom du terrain.', 'usage');
+  }
+
+  // 3. Collationnement des valeurs
+  const nums = (norm.match(/\d+/g) || []);
+  for (const k of ex.rb) {
+    if (k === 'cs') continue;
+    const val = String(ex.rbValues[k]);
+    let ok = false, said = 'absent';
+    if (k === 'qnh') {
+      ok = nums.includes(val);
+      const other = nums.find((n) => /^(9[5-9]\d|10[0-4]\d)$/.test(n) && n !== val);
+      if (!ok && other) said = other;
+    } else if (k === 'rwy') {
+      const m = norm.match(/(piste|runway)\s*(\d{1,2})/);
+      ok = nums.some((n) => n === val || n === String(+val));
+      if (m && +m[2] !== +val) { ok = false; said = m[2]; }
+    } else if (k === 'side') {
+      const left = /gauche|left/.test(val);
+      ok = left ? /gauche|left/.test(norm) : /droite|right/.test(norm);
+      if (!ok && (left ? /droite|right/.test(norm) : /gauche|left/.test(norm))) said = left ? 'droite' : 'gauche';
+    } else if (k === 'atis') {
+      const m = norm.match(/information\s+([a-z]+(?: [a-z]+)?)/);
+      ok = new RegExp(`information (${LETTER_RX[val]}|${val.toLowerCase()}\\b)`).test(norm);
+      if (!ok && m) said = m[1];
+    } else if (k === 'freq') {
+      ok = norm.replace(/\s/g, '').includes(val.replace(/\D/g, '').replace(/0+$/, ''));
+    }
+    coll.push({ element: RB_LABELS[k], attendu: k === 'atis' ? `${val} (${PHON[val]})` : val, entendu: ok ? val : said, ok });
+    if (!ok) {
+      add('majeure', 'collationnement', said, k === 'atis' ? `information ${PHON[val]}` : `${RB_LABELS[k]} ${val}`,
+        said === 'absent'
+          ? (k === 'atis' ? 'Annonce l\'information ATIS reçue dès le premier contact.' : `Élément « ${RB_LABELS[k]} » à collationner.`)
+          : `Valeur erronée : « ${said} » au lieu de « ${val} ».`);
+    }
+  }
+
+  // 4. « Roger » à la place d'un collationnement
+  const needsReadback = ex.rb.some((k) => ['qnh', 'rwy', 'side', 'freq'].includes(k));
+  if (needsReadback && /\broger\b/.test(norm) && coll.some((c) => !c.ok)) {
+    add('majeure', 'collationnement', 'roger', 'collationnement complet', '« Roger » ne remplace jamais un collationnement.');
+  }
+
+  // 5. Clairances et service
+  if (/\b(autoris|clearance|cleared|clear for)/.test(norm)) {
+    if (ex.kind === 'afis' || ex.kind === 'auto') {
+      add('majeure', 'terminologie', 'autorisation / clearance', 'annonce d\'intention (je m\'aligne et je décolle, j\'atterris)',
+        ex.kind === 'afis' ? 'Un AFIS ne délivre aucune clairance : le pilote annonce ses intentions.' : 'En auto-information, personne ne délivre de clairance.');
+    } else {
+      add('majeure', 'terminologie', 'autorisé', ex.lang === 'fr' ? 'j\'atterris / je décolle' : 'landing / taking off',
+        '« Autorisé » est réservé au contrôleur ; le pilote collationne par « j\'atterris » / « je décolle ».');
+    }
+  }
+
+  // 6. Éléments de contenu attendus
+  for (const key of ex.need || []) {
+    const n = NEED[key];
+    if (n && !n.test(norm, ex)) add(['nature', 'intent'].includes(key) ? 'majeure' : 'mineure', 'omission', 'absent', n.label, `Élément attendu dans ce message : ${n.label.toLowerCase()}.`);
+  }
+
+  // 7. Messages de détresse et d'urgence
+  if (ex.urgency) {
+    const word = ex.urgency === 'mayday' ? '(mayday|m aider|mai de)' : '(pan)';
+    const c = (norm.match(new RegExp(word, 'g')) || []).length;
+    const expected = ex.urgency === 'mayday' ? 3 : 6;
+    if (c === 0) add('majeure', 'omission', 'absent', ex.urgency === 'mayday' ? 'MAYDAY MAYDAY MAYDAY' : 'PAN PAN, PAN PAN, PAN PAN', 'Le message doit commencer par le signal de détresse ou d\'urgence.');
+    else if (c < expected) add('mineure', 'ordre', `${c}×`, ex.urgency === 'mayday' ? 'MAYDAY ×3' : 'PAN PAN ×3', 'Le signal se prononce de préférence trois fois (SERA.14095).');
+  }
+
+  // 8. Termes non conventionnels
+  for (const t of TERMS) {
+    if (new RegExp(t.rx).test(norm)) add(t.sev, t.cat, t.said, ex.lang === 'fr' ? t.fr : t.en, t.why);
+  }
+  // En anglais : piste/runway
+  if (ex.lang === 'en' && ex.rb.includes('rwy') && /\bpiste\b/.test(norm)) add('majeure', 'terminologie', 'piste', 'runway', 'Exercice en anglais : « runway ».');
+  if (ex.lang === 'fr' && ex.rb.includes('rwy') && /\brunway\b/.test(norm)) add('majeure', 'terminologie', 'runway', 'piste', 'Exercice en français : « piste ».');
+
+  const majors = erreurs.filter((e) => e.severite === 'majeure').length;
+  const minors = erreurs.filter((e) => e.severite === 'mineure').length;
+  const note = Math.max(0, 10 - majors * 3 - minors);
+  return {
+    local: true, engine: 'local',
+    note,
+    verdict: majors ? 'incorrect' : minors ? 'acceptable' : 'correct',
+    collationnement: coll,
+    erreurs,
+    version_corrigee: ex.model,
+    commentaire: majors || minors ? '' : 'Rien à signaler par les règles locales.',
+  };
+}
+
+// ===== app.js =====
+
+
+
+
+
+
+const $ = (sel, root = document) => root.querySelector(sel);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const screen = $('#screen');
+const settings = loadSettings();
+let session = null;
+
+// ── Façade radio ──────────────────────────────────────────────────
+function setLcd({ station, freq, info, qnh } = {}) {
+  $('#lcd-station').textContent = station ?? 'PHRASÉO RADIO';
+  $('#lcd-freq').textContent = freq ?? '— — —';
+  $('#lcd-info').textContent = info ?? '';
+  $('#lcd-qnh').textContent = qnh ?? '';
+}
+function lamp(state) { $('#lamp').className = `lamp ${state || ''}`; }
+
+document.addEventListener('pointerdown', unlockAudio, { once: true });
+
+$('#btn-home').addEventListener('click', () => {
+  if (session && !session.done && !confirm('Abandonner l\'exercice en cours ?')) return;
+  endSessionQuietly();
+  renderHome();
+});
+$('#btn-history').addEventListener('click', () => {
+  if (session && !session.done && !confirm('Abandonner l\'exercice en cours ?')) return;
+  endSessionQuietly();
+  renderHistory();
+});
+$('#btn-settings').addEventListener('click', () => {
+  if (session && !session.done && !confirm('Abandonner l\'exercice en cours ?')) return;
+  endSessionQuietly();
+  renderSettings();
+});
+
+function endSessionQuietly() {
+  stopSpeaking();
+  stopListening();
+  lamp();
+  if (session) session.aborted = true;
+  session = null;
+  setLcd();
+}
+
+// ── Accueil ───────────────────────────────────────────────────────
+const MODE_HELP = {
+  debutant: 'Correction après chaque transmission, réponse type disponible, messages de la station affichés.',
+  experimente: 'Messages à l\'écoute seulement, aucune aide, débrief complet à la fin du scénario.',
+};
+
+function renderHome() {
+  screen.innerHTML = '';
+  screen.append($('#tpl-home').content.cloneNode(true));
+
+  const syncSeg = () => {
+    screen.querySelectorAll('[data-lang]').forEach((b) => b.setAttribute('aria-checked', b.dataset.lang === settings.lang));
+    screen.querySelectorAll('[data-mode]').forEach((b) => b.setAttribute('aria-checked', b.dataset.mode === settings.mode));
+    $('#mode-help').textContent = MODE_HELP[settings.mode];
+  };
+  screen.querySelectorAll('[data-lang]').forEach((b) => b.addEventListener('click', () => { settings.lang = b.dataset.lang; saveSettings(settings); syncSeg(); }));
+  screen.querySelectorAll('[data-mode]').forEach((b) => b.addEventListener('click', () => { settings.mode = b.dataset.mode; saveSettings(settings); syncSeg(); }));
+  syncSeg();
+
+  const notices = [];
+  if (!aircraftList(settings).length) notices.push('Renseigne l\'immatriculation complète de tes avions (ex. F-GKAJ) pour t\'entraîner avec ton indicatif. <button data-go="settings">Ouvrir les réglages</button>');
+  if (!sttSupported) notices.push('Reconnaissance vocale indisponible ici : utilise la dictée du clavier iOS (icône micro du clavier) ou tape tes transmissions.');
+  const paint = () => {
+    $('#notices').innerHTML = notices.map((n) => `<div class="notice">${n}</div>`).join('');
+    $('#notices').querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', renderSettings));
+  };
+  paint();
+  engineName(settings).then((eng) => {
+    if (!$('#engine-line')) return;
+    $('#engine-line').textContent = eng === 'claude'
+      ? 'Correction par Claude, décomptée de ton utilisation Claude (aucun coût supplémentaire).'
+      : 'Correction par règles locales, gratuite et hors ligne.';
+  });
+
+  const history = loadHistory();
+  const groups = [...new Set(SCENARIOS.map((s) => s.group))];
+  $('#scenario-list').innerHTML = groups.map((g) => `
+    <h3>${esc(g)}</h3>
+    ${SCENARIOS.filter((s) => s.group === g).map((s) => {
+      const last = history.find((h) => h.scnId === s.id);
+      return `<button class="scn" data-scn="${s.id}">
+        <strong>${esc(s.title)}</strong>
+        <span>${esc(s.desc)}</span>
+        ${last ? `<span class="last">Dernier essai : ${last.note ?? '–'}/10, ${new Date(last.date).toLocaleDateString('fr-FR')}</span>` : ''}
+      </button>`;
+    }).join('')}`).join('');
+  $('#scenario-list').querySelectorAll('[data-scn]').forEach((b) => b.addEventListener('click', () => {
+    unlockAudio();
+    startScenario(SCENARIOS.find((s) => s.id === b.dataset.scn));
+  }));
+  setLcd();
+  window.scrollTo(0, 0);
+}
+
+// ── Session ───────────────────────────────────────────────────────
+function startScenario(scn) {
+  const ctx = buildContext(scn, settings);
+  session = {
+    scn, ctx, lang: settings.lang, mode: settings.mode, i: 0,
+    attempts: {}, // index d'étape → dernière tentative { ex, ev }
+    exchanges: [], prevStation: '', started: Date.now(), done: false,
+  };
+  const s = session;
+  const kindLabel = { afis: 'AFIS', twr: 'Tour', auto: 'Auto-information' }[ctx.ad.kind];
+  screen.innerHTML = `
+    <section>
+      <div class="session-head">
+        <h2>${esc(scn.title)}</h2>
+        <p>${esc(ctx.ad.full)} (${ctx.ad.oaci}), ${kindLabel}, ${s.lang === 'fr' ? 'français' : 'anglais'}, mode ${s.mode === 'debutant' ? 'débutant' : 'expérimenté'}. Indicatif ${esc(ctx.reg)}, ${esc(ctx.acType || '')}.</p>
+        ${scn.note ? `<p>${esc(scn.note)}</p>` : ''}
+      </div>
+      <div class="log" id="log"></div>
+      <div class="dock" id="dock"></div>
+    </section>`;
+  setLcd({ station: render('{st}', ctx, s.lang).toUpperCase(), freq: ctx.ad.freq });
+  window.scrollTo(0, 0);
+  runStep();
+}
+
+const logEl = () => $('#log');
+const dockEl = () => $('#dock');
+function appendLog(html) {
+  const div = document.createElement('div');
+  div.innerHTML = html;
+  const node = div.firstElementChild;
+  logEl().append(node);
+  node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  return node;
+}
+function setDock(html) { dockEl().innerHTML = html; }
+const alive = (s) => s === session && !s.aborted;
+
+async function runStep() {
+  const s = session;
+  if (!alive(s)) return;
+  const step = s.scn.steps[s.i];
+  if (!step) { finishSession(); return; }
+  ({ atis: stepAtis, quiz: stepQuiz, st: stepStation, other: stepStation, pi: stepPilot })[step.t](step);
+}
+function next() { if (!session) return; session.i += 1; runStep(); }
+
+function voiceOpts(lang) { return { rate: settings.rate, voice: lang === 'fr' ? settings.voiceFr : settings.voiceEn }; }
+
+async function transmit(text, lang) {
+  const s = session;
+  lamp('rx');
+  await squelch();
+  if (!alive(s)) return;
+  await speak(text, lang, voiceOpts(lang));
+  if (!alive(s)) return;
+  await squelch(0.08, 0.05);
+  lamp();
+}
+
+function hiddenText(text, label = 'Afficher le texte') {
+  return `<span class="hidden-text">À l'écoute uniquement. <button class="reveal" data-reveal="${esc(text)}">${label}</button></span>`;
+}
+function wireReveal(node) {
+  node.querySelectorAll('[data-reveal]').forEach((b) => b.addEventListener('click', () => {
+    const span = document.createElement('span');
+    span.className = 'atis-text';
+    span.textContent = b.dataset.reveal;
+    b.parentElement.replaceWith(span);
+  }));
+}
+
+// ATIS
+async function stepAtis() {
+  const s = session;
+  const { ctx, lang } = s;
+  const txt = ctx.atisText[lang];
+  const beginner = s.mode === 'debutant';
+  const node = appendLog(`<div class="msg station"><span class="who">ATIS ${esc(ctx.ad.name)}</span>
+    ${beginner ? `<span class="atis-text">${esc(txt.d)}</span>` : hiddenText(txt.d)}</div>`);
+  wireReveal(node);
+  setLcd({ station: `ATIS ${ctx.ad.name.toUpperCase()}`, freq: ctx.ad.freq });
+  const play = async () => {
+    setDock(`<p class="dock-note">Diffusion de l'ATIS…</p>`);
+    await transmit(txt.s, lang);
+    if (!alive(s)) return;
+    setDock(`<div class="actions">
+      <button class="btn" id="replay">Réécouter</button>
+      <button class="btn primary" id="go">${s.scn.steps[s.i + 1]?.t === 'quiz' ? 'Relever les éléments' : 'Passer sur la fréquence'}</button></div>
+      ${!ttsSupported ? '<p class="dock-note">Synthèse vocale indisponible : lis le texte.</p>' : ''}`);
+    $('#replay').addEventListener('click', play);
+    $('#go').addEventListener('click', () => {
+      stopSpeaking();
+      setLcd({ station: render('{st}', ctx, lang).toUpperCase(), freq: ctx.ad.freq, info: `INFO ${ctx.atis}` });
+      next();
+    });
+  };
+  play();
+}
+
+// Relevé ATIS
+function stepQuiz() {
+  const s = session;
+  const { ctx } = s;
+  const items = [
+    { k: 'atis', label: 'Lettre', expect: ctx.atis, norm: (v) => v.trim().toUpperCase().slice(0, 1) },
+    { k: 'rwy', label: 'Piste', expect: ctx.rwy, norm: (v) => v.replace(/\D/g, '').padStart(2, '0') },
+    { k: 'wd', label: 'Vent (direction)', expect: String(ctx.windDir).padStart(3, '0'), norm: (v) => v.replace(/\D/g, '').padStart(3, '0') },
+    { k: 'ws', label: 'Vent (nœuds)', expect: String(ctx.windSpd), norm: (v) => String(+v.replace(/\D/g, '') || '') },
+    { k: 'qnh', label: 'QNH', expect: String(ctx.qnh), norm: (v) => v.replace(/\D/g, '') },
+    { k: 'temp', label: 'Température', expect: String(ctx.temp), norm: (v) => v.replace(/[^\d-]/g, '') },
+  ];
+  const node = appendLog(`<form class="quiz" id="quiz" autocomplete="off">
+    ${items.map((it) => `<label>${esc(it.label)}<input name="${it.k}" inputmode="${it.k === 'atis' ? 'text' : 'numeric'}"><span class="res" data-res="${it.k}"></span></label>`).join('')}
+  </form>`);
+  setDock(`<div class="actions"><button class="btn primary" id="check">Vérifier</button><button class="btn" id="relisten">Réécouter l'ATIS</button></div>`);
+  $('#relisten').addEventListener('click', () => transmit(ctx.atisText[s.lang].s, s.lang));
+  $('#check').addEventListener('click', () => {
+    let good = 0;
+    const errors = [];
+    items.forEach((it) => {
+      const val = node.querySelector(`[name=${it.k}]`).value;
+      const ok = val && it.norm(val) === it.expect;
+      if (ok) good += 1;
+      else errors.push({ severite: 'majeure', categorie: 'ATIS', entendu: val || 'vide', correction: it.expect, explication: `${it.label} mal relevé(e).`, source: 'manuel' });
+      const res = node.querySelector(`[data-res="${it.k}"]`);
+      res.textContent = ok ? '✓' : `→ ${it.expect}`;
+      res.className = `res ${ok ? 'ok' : 'ko'}`;
+    });
+    const note = Math.round((good / items.length) * 10);
+    s.attempts[s.i] = { ex: { situation: 'Relevé ATIS', transcript: '', model: ctx.atisText[s.lang].d }, ev: { note, verdict: note >= 8 ? 'correct' : note >= 5 ? 'acceptable' : 'incorrect', erreurs: errors } };
+    stopSpeaking();
+    setDock(`<p class="dock-note">${good}/${items.length} éléments justes.</p><div class="actions"><button class="btn primary" id="go">Terminer</button></div>`);
+    $('#go').addEventListener('click', next);
+  });
+}
+
+// Station ou autre aéronef
+async function stepStation(step) {
+  const s = session;
+  const { ctx, lang } = s;
+  const d = render(step[lang], ctx, lang, 'd');
+  const sp = render(step[lang], ctx, lang, 's');
+  const who = step.t === 'other' ? 'Autre aéronef' : render('{st}', ctx, lang);
+  const beginner = s.mode === 'debutant';
+  const node = appendLog(`<div class="msg ${step.t === 'other' ? 'other' : 'station'}"><span class="who">${esc(who)}</span>
+    ${beginner ? esc(d) : hiddenText(d)}</div>`);
+  wireReveal(node);
+  if (step.t === 'st') s.prevStation = d;
+  if (step[lang].includes('{qnh}')) {
+    setLcd({ station: render('{st}', ctx, lang).toUpperCase(), freq: ctx.ad.freq, info: $('#lcd-info').textContent, qnh: `Q${ctx.qnh}` });
+  }
+  setDock(`<p class="dock-note">Réception…</p>`);
+  await transmit(sp, lang);
+  if (!alive(s)) return;
+  next();
+}
+
+// Transmission du pilote
+function buildExchange(step, transcript) {
+  const s = session;
+  const { ctx, lang } = s;
+  return {
+    kind: ctx.ad.kind, lang,
+    prevStation: s.prevStation,
+    situation: render(step.sit, ctx, 'fr', 'd'),
+    cs: ctx.reg, csA: ctx.abbr, abbr: step.abbr,
+    rb: step.rb,
+    rbValues: Object.fromEntries(step.rb.map((k) => [k, k === 'side' ? (lang === 'fr' ? ctx.side : (ctx.side === 'gauche' ? 'left-hand' : 'right-hand')) : ctx.keys[k]])),
+    model: render(step[lang], ctx, lang, 'd'),
+    modelTpl: step[lang],
+    src: step.src,
+    need: step.need || [],
+    urgency: step.urg || null,
+    stationFirst: /^(PAN PAN, PAN PAN, PAN PAN, |MAYDAY, MAYDAY, MAYDAY, )?\{st\}/.test(step[lang]),
+    stationName: render('{st}', ctx, lang, 'd'),
+    acType: ctx.acType,
+    fromName: ctx.from.name,
+    toName: ctx.to.name,
+    transcript,
+  };
+}
+
+function stepPilot(step) {
+  const s = session;
+  const { ctx, lang } = s;
+  const beginner = s.mode === 'debutant';
+  const model = render(step[lang], ctx, lang, 'd');
+  const node = appendLog(`<div class="sit">${esc(render(step.sit, ctx, 'fr', 'd'))}
+    ${(() => { const req = step.rb.map((k) => RB_LABELS[k]); if (!step.abbr && !step.rb.includes('cs')) req.push('Indicatif complet'); return req.length ? `<span class="src">À inclure : ${req.join(', ')}</span>` : ''; })()}
+    ${beginner ? `<button class="link" data-hint>Voir la réponse type</button><div class="hint" hidden>${esc(model)}${step.src === 'usage' ? '<br><small>(pratique usuelle, hors manuel)</small>' : ''}</div>` : ''}
+  </div>`);
+  node.querySelector('[data-hint]')?.addEventListener('click', (e) => { e.target.nextElementSibling.hidden = false; e.target.remove(); });
+
+  setDock(`
+    <textarea id="tx" placeholder="${sttSupported ? 'Maintiens le bouton et parle, ou tape ici' : 'Tape ta transmission'}" aria-label="Ta transmission"></textarea>
+    <div class="dock-row">
+      ${sttSupported ? `<button class="ptt" id="ptt">Alternat — maintenir pour parler</button>` : '<span class="dock-note">Saisie clavier</span>'}
+      <button class="btn primary" id="send" disabled>Émettre</button>
+    </div>
+    <p class="dock-note" id="dock-status">${lang === 'fr' ? 'Transmission en français.' : 'Transmit in English.'}</p>`);
+  const tx = $('#tx');
+  const send = $('#send');
+  tx.addEventListener('input', () => { send.disabled = !tx.value.trim(); });
+  if (sttSupported) wirePtt($('#ptt'), tx, send, lang);
+  send.addEventListener('click', () => submitPilot(step, tx.value.trim()));
+}
+
+function wirePtt(btn, tx, send, lang) {
+  let listening = false, latched = false, t0 = 0;
+  const status = $('#dock-status');
+  const stop = () => { stopListening(); };
+  const reset = () => {
+    listening = false; latched = false;
+    btn.classList.remove('on'); btn.textContent = 'Alternat — maintenir pour parler';
+    lamp();
+    send.disabled = !tx.value.trim();
+  };
+  btn.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    if (listening && latched) { stop(); return; }
+    if (listening) return;
+    listening = true; t0 = Date.now();
+    btn.classList.add('on'); btn.textContent = 'Émission…';
+    lamp('tx');
+    send.disabled = true;
+    startListening(lang, {
+      onText: (t) => { tx.value = t; },
+      onEnd: () => reset(),
+      onError: (err) => {
+        if (err === 'not-allowed' || err === 'service-not-allowed') status.textContent = 'Micro indisponible ici : touche la zone de texte et utilise la dictée du clavier iOS (icône micro), ou autorise le micro dans Réglages iOS › Safari.';
+        else if (err === 'no-speech') status.textContent = 'Aucune voix détectée, réessaie.';
+        else if (err !== 'aborted') status.textContent = `Reconnaissance vocale : ${err}`;
+        reset();
+      },
+    });
+  });
+  const release = () => {
+    if (!listening) return;
+    if (!latched && Date.now() - t0 < 350) { // tap bref : mode bascule
+      latched = true; btn.textContent = 'Touche pour arrêter';
+      return;
+    }
+    if (!latched) stop();
+  };
+  btn.addEventListener('pointerup', release);
+  btn.addEventListener('pointercancel', release);
+  btn.addEventListener('contextmenu', (e) => e.preventDefault());
+}
+
+async function submitPilot(step, transcript) {
+  const s = session;
+  if (!transcript) return;
+  stopListening();
+  const ex = buildExchange(step, transcript);
+  appendLog(`<div class="msg pilot"><span class="who">Toi</span>${esc(transcript)}</div>`);
+
+  if (s.mode === 'experimente') {
+    s.attempts[s.i] = { ex, ev: null };
+    next();
+    return;
+  }
+  setDock(`<p class="dock-note"><span class="spinner"></span>Correction en cours…</p>`);
+  const ev = await evaluateStep(settings, ex);
+  if (!alive(s)) return;
+  s.attempts[s.i] = { ex, ev };
+  appendLog(evalHtml(ev));
+  setDock(`<div class="actions">
+    <button class="btn" id="retry">Recommencer</button>
+    <button class="btn primary" id="go">Continuer</button></div>`);
+  $('#retry').addEventListener('click', () => stepPilot(step));
+  $('#go').addEventListener('click', next);
+}
+
+function errWords(e) {
+  const missing = !e.entendu || ['—', 'absent', 'vide'].includes(String(e.entendu).toLowerCase());
+  return `${missing ? 'Manque : ' : `<s>${esc(e.entendu)}</s> `}<ins>${esc(e.correction)}</ins>`;
+}
+
+function evalHtml(ev, title) {
+  const verdictLabel = { correct: 'Correct', acceptable: 'Acceptable', incorrect: 'À reprendre' }[ev.verdict] || ev.verdict;
+  return `<div class="eval">
+    <div class="eval-head">
+      <span class="verdict ${esc(ev.verdict)}">${title ? `${esc(title)} : ` : ''}${esc(verdictLabel)}</span>
+      <span class="score">${ev.note ?? '–'}/10</span>
+    </div>
+    <span class="local-tag">${ev.engine === 'claude' ? 'Corrigé par Claude' : 'Règles locales'}</span>
+    ${ev.collationnement?.length ? `<div class="rb">${ev.collationnement.map((c) => `<span class="${c.ok ? 'ok' : 'ko'}">${c.ok ? '✓' : '✗'} ${esc(c.element)} ${esc(c.attendu)}</span>`).join('')}</div>` : ''}
+    ${ev.erreurs?.length ? `<ul class="err">${ev.erreurs.map((e) => `<li class="${esc(e.severite)}">
+        ${errWords(e)}
+        <small>${esc(e.explication)}${e.source === 'usage' ? ' (usage, hors manuel)' : ''}</small></li>`).join('')}</ul>` : ''}
+    ${ev.version_corrigee && ev.verdict !== 'correct' ? `<div class="fixed">${esc(ev.version_corrigee)}</div>` : ''}
+    ${ev.commentaire ? `<p class="comment">${esc(ev.commentaire)}</p>` : ''}
+  </div>`;
+}
+
+async function finishSession() {
+  const s = session;
+  if (!s || s.done) return;
+  s.done = true;
+  lamp();
+  const indices = Object.keys(s.attempts).map(Number).sort((a, b) => a - b);
+  let debrief = null;
+
+  if (s.mode === 'experimente') {
+    const exs = indices.filter((i) => s.scn.steps[i].t === 'pi').map((i) => s.attempts[i].ex);
+    setDock(`<p class="dock-note"><span class="spinner"></span>Débrief en cours… (jusqu'à une minute avec Claude)</p>`);
+    if (exs.length) {
+      debrief = await evaluateSession(settings, exs, { title: s.scn.title, ad: s.ctx.ad.name, lang: s.lang });
+      if (!alive(s)) return;
+      const piIdx = indices.filter((i) => s.scn.steps[i].t === 'pi');
+      piIdx.forEach((i, n) => { if (debrief.etapes?.[n]) s.attempts[i].ev = debrief.etapes[n]; });
+    }
+    indices.forEach((i) => { if (!s.attempts[i].ev) s.attempts[i].ev = localCheck(s.attempts[i].ex); });
+    if (debrief) {
+      appendLog(`<div class="eval">
+        <div class="eval-head"><span class="verdict">Débrief</span><span class="score">${debrief.note_globale ?? '–'}/10</span></div>
+        <p>${esc(debrief.synthese || '')}</p>
+        ${debrief.points_forts?.length ? `<p><strong>Points forts</strong></p><ul class="recurring">${debrief.points_forts.map((p) => `<li>${esc(p)}</li>`).join('')}</ul>` : ''}
+        ${debrief.axes_de_progres?.length ? `<p><strong>Axes de progrès</strong></p><ul class="recurring">${debrief.axes_de_progres.map((p) => `<li>${esc(p)}</li>`).join('')}</ul>` : ''}
+      </div>`);
+    }
+    indices.filter((i) => s.scn.steps[i].t === 'pi').forEach((i, n) => {
+      const a = s.attempts[i];
+      appendLog(`<div><div class="msg pilot"><span class="who">Transmission ${n + 1} — ${esc(a.ex.situation)}</span>${esc(a.ex.transcript)}</div>${evalHtml(a.ev)}</div>`);
+    });
+  }
+
+  const evs = indices.map((i) => s.attempts[i].ev).filter(Boolean);
+  const note = debrief?.note_globale ?? (evs.length ? Math.round(evs.reduce((t, e) => t + (e.note || 0), 0) / evs.length * 10) / 10 : null);
+  const errors = indices.flatMap((i) => (s.attempts[i].ev?.erreurs || []).map((e) => ({ ...e, step: i })));
+
+  addSession({
+    id: `${Date.now()}`, date: new Date().toISOString(), scnId: s.scn.id, title: s.scn.title,
+    ad: s.ctx.ad.name, lang: s.lang, mode: s.mode, note, reg: s.ctx.reg,
+    synthese: debrief?.synthese || '',
+    errors: errors.map(({ severite, categorie, entendu, correction, explication, step }) => ({ severite, categorie, entendu, correction, explication, step })),
+    steps: indices.map((i) => ({ situation: s.attempts[i].ex.situation, transcript: s.attempts[i].ex.transcript, model: s.attempts[i].ex.model, note: s.attempts[i].ev?.note, verdict: s.attempts[i].ev?.verdict })),
+  });
+
+  appendLog(`<div class="eval"><div class="eval-head"><span class="verdict">Fin de l'exercice</span><span class="score">${note ?? '–'}/10</span></div>
+    <p class="comment">${errors.filter((e) => e.severite === 'majeure').length} erreur(s) majeure(s), ${errors.filter((e) => e.severite !== 'majeure').length} remarque(s). Session enregistrée dans l'historique.</p></div>`);
+  setDock(`<div class="actions">
+    <button class="btn primary" id="again">Refaire avec d'autres conditions</button>
+    <button class="btn" id="home">Autres exercices</button></div>`);
+  $('#again').addEventListener('click', () => startScenario(s.scn));
+  $('#home').addEventListener('click', () => { session = null; renderHome(); });
+}
+
+// ── Historique ────────────────────────────────────────────────────
+function renderHistory() {
+  setLcd({ station: 'HISTORIQUE', freq: '' });
+  const h = loadHistory();
+  if (!h.length) {
+    screen.innerHTML = `<section><h2>Historique</h2><p class="empty">Aucune session pour l'instant. Termine un exercice pour suivre ta progression ici.</p>
+      <button class="btn primary" id="back">Choisir un exercice</button></section>`;
+    $('#back').addEventListener('click', renderHome);
+    return;
+  }
+  const recent = h.slice(0, 20);
+  const notes = recent.map((x) => x.note).filter((n) => n != null);
+  const avg = notes.length ? (notes.reduce((a, b) => a + b, 0) / notes.length).toFixed(1) : '–';
+  const cats = {};
+  recent.forEach((x) => x.errors.forEach((e) => { cats[e.categorie] = (cats[e.categorie] || 0) + 1; }));
+  const catList = Object.entries(cats).sort((a, b) => b[1] - a[1]);
+  const max = catList[0]?.[1] || 1;
+  const corr = {};
+  recent.forEach((x) => x.errors.filter((e) => e.severite !== 'conseil').forEach((e) => {
+    const key = e.explication;
+    corr[key] = corr[key] || { n: 0, e };
+    corr[key].n += 1;
+  }));
+  const recurring = Object.values(corr).filter((c) => c.n > 1).sort((a, b) => b.n - a.n).slice(0, 5);
+
+  screen.innerHTML = `<section>
+    <h2>Historique</h2>
+    <p>${h.length} session(s). Moyenne des 20 dernières : <strong>${avg}/10</strong>.</p>
+    ${catList.length ? `<h3>Types d'erreurs récents</h3>${catList.map(([c, n]) => `<div class="bar"><span>${esc(c)}</span><i style="width:${Math.round((n / max) * 100)}%"></i><span>${n}</span></div>`).join('')}` : ''}
+    ${recurring.length ? `<h3>Erreurs qui reviennent</h3><ul class="recurring">${recurring.map((c) => `<li>${esc(c.e.explication)} <small>(${c.n} fois)</small></li>`).join('')}</ul>` : ''}
+    <h3>Sessions</h3>
+    ${h.map((x) => `<details class="hist-item">
+      <summary><span><strong>${esc(x.title)}</strong><br><span class="meta">${new Date(x.date).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })}, ${esc(x.ad)}, ${x.lang.toUpperCase()}, ${x.mode === 'debutant' ? 'débutant' : 'expérimenté'}</span></span>
+      <span class="score">${x.note ?? '–'}/10</span></summary>
+      ${x.synthese ? `<p class="comment">${esc(x.synthese)}</p>` : ''}
+      ${x.steps.filter((st) => st.transcript).map((st) => `<div class="msg pilot" style="margin-top:8px"><span class="who">${esc(st.situation)} (${st.note ?? '–'}/10)</span>${esc(st.transcript)}<div class="fixed">${esc(st.model)}</div></div>`).join('')}
+      ${x.errors.length ? `<ul class="err">${x.errors.map((e) => `<li class="${esc(e.severite)}">${errWords(e)}<small>${esc(e.explication)}</small></li>`).join('')}</ul>` : ''}
+    </details>`).join('')}
+    <div class="actions" style="margin-top:18px">
+      <button class="btn" id="export">Exporter (JSON)</button>
+      <button class="btn" id="clear">Effacer l'historique</button>
+    </div>
+  </section>`;
+  $('#export').addEventListener('click', () => {
+    const blob = new Blob([JSON.stringify(h, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `phraseo-historique-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  });
+  $('#clear').addEventListener('click', () => {
+    if (confirm('Effacer tout l\'historique ? Cette action est définitive.')) { clearHistory(); renderHistory(); }
+  });
+  window.scrollTo(0, 0);
+}
+
+// ── Réglages ──────────────────────────────────────────────────────
+function renderSettings() {
+  setLcd({ station: 'RÉGLAGES', freq: '' });
+  const afis = AERODROMES.filter((a) => a.kind === 'afis');
+  const voiceSelect = (lang, cur) => {
+    const list = voicesFor(lang);
+    return `<select data-voice="${lang}"><option value="">Automatique</option>${list.map((v) => `<option value="${esc(v.voiceURI)}" ${v.voiceURI === cur ? 'selected' : ''}>${esc(v.name)} (${esc(v.lang)})</option>`).join('')}</select>`;
+  };
+  screen.innerHTML = `<section class="form">
+    <h2>Réglages</h2>
+
+    <h3>Avions</h3>
+    ${settings.aircraft.map((a, i) => `<div class="pair">
+      <label class="field"><span>Immatriculation ${i + 1}</span><input data-ac="${i}" data-f="reg" value="${esc(a.reg)}" placeholder="F-GKAJ" autocapitalize="characters" autocomplete="off"></label>
+      <label class="field"><span>Type</span><input data-ac="${i}" data-f="type" value="${esc(a.type)}" placeholder="DR400"></label>
+    </div>`).join('')}
+    <label class="field"><span>Terrain de base (AFIS)</span>
+      <select id="homeAd"><option value="">Aucun</option>${afis.map((a) => `<option value="${a.oaci}" ${a.oaci === settings.homeAd ? 'selected' : ''}>${esc(a.full)}</option>`).join('')}</select>
+      <small>Proposé plus souvent dans les exercices AFIS.</small></label>
+
+    <h3>Correction</h3>
+    <label class="field"><span>Moteur de correction</span>
+      <select id="engine">
+        <option value="auto" ${settings.engine !== 'local' ? 'selected' : ''}>Claude si disponible, sinon règles locales</option>
+        <option value="local" ${settings.engine === 'local' ? 'selected' : ''}>Toujours les règles locales</option>
+      </select>
+      <small id="engineInfo"></small></label>
+
+    <h3>Voix</h3>
+    <label class="field"><span>Débit de parole : <output id="rateOut">${settings.rate.toFixed(2)}</output></span>
+      <input id="rate" type="range" min="0.8" max="1.4" step="0.05" value="${settings.rate}"></label>
+    <label class="field"><span>Voix française</span>${voiceSelect('fr', settings.voiceFr)}</label>
+    <label class="field"><span>Voix anglaise</span>${voiceSelect('en', settings.voiceEn)}</label>
+    <div class="actions"><button class="btn" data-test="fr">Écouter (FR)</button><button class="btn" data-test="en">Écouter (EN)</button></div>
+    <p class="dock-note" style="color:var(--ink-soft)">Sur iPhone, des voix de meilleure qualité se téléchargent dans Réglages › Accessibilité › Contenu énoncé › Voix.</p>
+
+    <button class="btn primary" id="done">Enregistrer et revenir</button>
+  </section>`;
+
+  const save = () => saveSettings(settings);
+  screen.querySelectorAll('[data-ac]').forEach((inp) => inp.addEventListener('input', () => {
+    const val = inp.dataset.f === 'reg' ? inp.value.toUpperCase().trim() : inp.value.trim();
+    settings.aircraft[+inp.dataset.ac][inp.dataset.f] = val;
+    save();
+  }));
+  $('#homeAd').addEventListener('change', (e) => { settings.homeAd = e.target.value; save(); });
+  const showEngine = () => engineName({ engine: 'auto' }).then((eng) => {
+    $('#engineInfo').textContent = eng === 'claude'
+      ? 'Claude est disponible ici : les corrections sont décomptées de ton utilisation Claude, sans facturation à part. Au premier appel, claude.ai te demande l\'autorisation.'
+      : 'Claude n\'est pas disponible ici (version GitHub ou hors ligne) : correction par règles locales, gratuite. Ouvre l\'app publiée dans claude.ai pour la correction par Claude.';
+  });
+  showEngine();
+  $('#engine').addEventListener('change', (e) => { settings.engine = e.target.value; save(); });
+  $('#rate').addEventListener('input', (e) => { settings.rate = +e.target.value; $('#rateOut').textContent = settings.rate.toFixed(2); save(); });
+  screen.querySelectorAll('[data-voice]').forEach((sel) => sel.addEventListener('change', () => {
+    settings[sel.dataset.voice === 'fr' ? 'voiceFr' : 'voiceEn'] = sel.value; save();
+  }));
+  screen.querySelectorAll('[data-test]').forEach((b) => b.addEventListener('click', () => {
+    unlockAudio();
+    const l = b.dataset.test;
+    speak(l === 'fr' ? 'Fox Alfa Juliett, piste deux neuf libre, vent deux huit zéro degrés, huit nœuds.' : 'Fox Alfa Juliett, runway two niner free, wind two eight zero degrees, eight knots.', l, voiceOpts(l));
+  }));
+  $('#done').addEventListener('click', renderHome);
+  window.scrollTo(0, 0);
+}
+
+// ── Démarrage ─────────────────────────────────────────────────────
+if ('serviceWorker' in navigator && location.protocol === 'https:' && !window.claude) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+renderHome();
+
+</script>
+</body>
+</html>
